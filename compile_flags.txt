@@ -1,0 +1,10 @@
+-std=c++20
+-Isource
+-Wall
+-Wextra
+-Wreturn-type
+-Wconversion
+-Wsign-conversion
+-Wdouble-promotion
+-Wheader-hygiene
+-Wmissing-include-dirs

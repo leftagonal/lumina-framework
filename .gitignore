@@ -1,0 +1,13 @@
+# Intermediate directories
+build/
+out/
+docs/
+
+# Caches and IDE config
+.cache/
+.vscode/
+
+# Hidden System Files
+.DS_Store
+._*/
+._*
