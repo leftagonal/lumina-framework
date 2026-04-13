@@ -4,7 +4,7 @@
 
 namespace eecs {
     template <typename T>
-    concept component = std::is_trivial_v<T> && std::is_standard_layout_v<T>;
+    concept component = std::is_trivially_destructible_v<T> && std::is_trivially_move_constructible_v<T> && std::is_trivially_copy_constructible_v<T> && std::is_standard_layout_v<T>;
 
     template <typename T>
     inline constexpr bool is_component_v = component<T>;
