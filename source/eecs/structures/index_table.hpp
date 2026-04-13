@@ -34,7 +34,7 @@ namespace eecs {
                 return;
             }
 
-            if (sparse_[sparse] == empty_sparse) {
+            if (sparse_.size() <= sparse) {
                 sparse_.resize(sparse + 1, empty_sparse);
             }
 
@@ -45,7 +45,7 @@ namespace eecs {
         }
 
         [[nodiscard]] bool contains(type sparse) const {
-            return sparse_.size() < sparse && sparse_[sparse] != empty_sparse;
+            return sparse_.size() > sparse && sparse_[sparse] != empty_sparse;
         }
 
         void remove(type sparse) {
