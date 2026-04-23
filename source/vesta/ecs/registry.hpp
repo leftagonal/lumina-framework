@@ -1,15 +1,29 @@
 #pragma once
 
-#include <eecs/structures/allocation.hpp>
-#include <eecs/structures/component_store.hpp>
-#include <eecs/structures/entity.hpp>
-#include <eecs/structures/generic_binding.hpp>
-#include <eecs/structures/index_table.hpp>
+#include <vesta/structures/allocation.hpp>
+#include <vesta/structures/index_table.hpp>
 
-#include <eecs/meta/type_index.hpp>
+#include <vesta/ecs/entity.hpp>
+#include <vesta/ecs/set_functions.hpp>
 
-namespace eecs {
+#include <vesta/traits/pod_type.hpp>
+#include <vesta/traits/type_index.hpp>
+
+namespace vesta {
+    namespace internal {
+        struct ecs_type_context_t {};
+
+        template <>
+        inline constexpr bool is_type_context_v<ecs_type_context_t> = true;
+    }
+
     class registry final {
+        using set_functions = internal::set_functions;
+        using index_type = entity::value_type;
+        using index_table = internal::index_table<index_type>;
+        using allocation = internal::allocation;
+        using context_type = internal::ecs_type_context_t;
+
     public:
         registry() = default;
         ~registry() = default;
@@ -21,8 +35,8 @@ namespace eecs {
         registry& operator=(registry&&) noexcept = default;
 
         [[nodiscard]] entity create() {
-            index_table::type id;
-            index_table::type version;
+            index_type id;
+            index_type version;
 
             if (!free_list_.empty()) {
                 id = free_list_.back();
@@ -32,7 +46,7 @@ namespace eecs {
                 statuses_[id] = false;
 
             } else {
-                id = static_cast<index_table::type>(versions_.size());
+                id = static_cast<index_type>(versions_.size());
                 version = versions_.emplace_back(0);
 
                 statuses_.emplace_back(true);
@@ -46,8 +60,8 @@ namespace eecs {
                 return false;
             }
 
-            index_table::type id = target.id();
-            index_table::type version = target.version();
+            index_type id = target.id();
+            index_type version = target.version();
 
             return versions_.size() > id && versions_[id] == version && statuses_[id];
         }
@@ -57,7 +71,7 @@ namespace eecs {
                 return;
             }
 
-            index_table::type id = target.id();
+            index_type id = target.id();
 
             remove_all(target);
 
@@ -69,24 +83,23 @@ namespace eecs {
         void clear() {
             allocations_.clear();
             index_tables_.clear();
-            generic_bindings_.clear();
 
             versions_.clear();
             free_list_.clear();
             statuses_.clear();
         }
 
-        template <component T, typename... Args>
+        template <internal::pod_type T, typename... Args>
         T& emplace(const entity& target, Args&&... args) {
             std::size_t index = acquire<T>();
 
             allocation& allocation = allocations_[index];
             index_table& table = index_tables_[index];
 
-            return component_store<T>::insert(allocation, table, target.id(), std::forward<Args>(args)...);
+            return set_functions::insert<T>(allocation, table, target.id(), std::forward<Args>(args)...);
         }
 
-        template <component T>
+        template <internal::pod_type T>
         [[nodiscard]] bool has(const entity& target) const {
             if (!acquirable<T>()) {
                 return false;
@@ -99,79 +112,96 @@ namespace eecs {
             return table.contains(target.id());
         }
 
-        template <component T>
+        template <internal::pod_type T>
         [[nodiscard]] T& get(const entity& target) {
             std::size_t index = type_index<T>();
 
             allocation& allocation = allocations_[index];
             index_table& table = index_tables_[index];
 
-            return component_store<T>::get(allocation, table, target.id());
+            return set_functions::get<T>(allocation, table, target.id());
         }
 
-        template <component T>
+        template <internal::pod_type T>
         [[nodiscard]] const T& get(const entity& target) const {
             std::size_t index = type_index<T>();
 
             const allocation& allocation = allocations_[index];
             const index_table& table = index_tables_[index];
 
-            return component_store<T>::get(allocation, table, target.id());
+            return set_functions::get<T>(allocation, table, target.id());
         }
 
-        template <component T>
+        template <internal::pod_type T>
         void remove(const entity& target) {
             std::size_t index = type_index<T>();
 
             allocation& allocation = allocations_[index];
             index_table& table = index_tables_[index];
-            generic_binding& binding = generic_bindings_[index];
 
-            binding.remove(allocation, table, target.id());
+            set_functions::remove(allocation, table, target.id());
         }
 
         void remove_all(const entity& target) {
-            for (std::size_t i = 0; i < generic_bindings_.size(); i++) {
+            for (std::size_t i = 0; i < allocations_.size(); ++i) {
                 index_table& table = index_tables_[i];
 
-                if (table.contains(target.id())) {
-                    allocation& allocation = allocations_[i];
-                    generic_binding& binding = generic_bindings_[i];
-
-                    binding.remove(allocation, table, target.id());
+                if (!table.contains(target.id())) {
+                    return;
                 }
+
+                allocation& allocation = allocations_[i];
+                index_type location = table[target.id()];
+
+                const std::size_t stride = allocation.stride();
+                const std::size_t size = allocation.size();
+
+                std::size_t destination_offset = location * stride;
+                std::size_t source_offset = size - stride;
+
+                if (destination_offset < source_offset) {
+                    std::byte* data = allocation.data();
+                    std::byte* destination = data + destination_offset;
+                    std::byte* source = data + source_offset;
+
+                    std::memmove(destination, source, stride);
+                }
+
+                allocation.shrink(1);
+                table.remove(target.id());
             }
         }
 
     private:
         std::vector<allocation> allocations_;
         std::vector<index_table> index_tables_;
-        std::vector<generic_binding> generic_bindings_;
 
-        std::vector<index_table::type> versions_;
-        std::vector<index_table::type> free_list_;
+        std::vector<index_type> versions_;
+        std::vector<index_type> free_list_;
         std::vector<bool> statuses_;
 
-        template <component T>
+        template <internal::pod_type T>
+        [[nodiscard]] static std::size_t type_index() {
+            return internal::type_index<context_type, T>();
+        }
+
+        template <internal::pod_type T>
         [[nodiscard]] std::size_t acquire() {
             std::size_t index = type_index<T>();
 
             if (index >= allocations_.size()) {
-                allocations_.resize(index + 1);
-                index_tables_.resize(index + 1);
-                generic_bindings_.resize(index + 1);
+                allocations_.resize(std::max(4ul, index * 2));
+                index_tables_.resize(std::max(4ul, index * 2));
             }
 
-            generic_binding& binding = generic_bindings_[index];
-
-            if (!binding) {
-                binding.bind<T>();
+            if (!allocations_[index]) {
+                allocations_[index].initialise(sizeof(T));
             }
 
             return index;
         }
 
-        template <component T>
+        template <internal::pod_type T>
         [[nodiscard]] bool acquirable() const {
             std::size_t index = type_index<T>();
 

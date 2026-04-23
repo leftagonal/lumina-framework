@@ -3,32 +3,32 @@ cmake_minimum_required(VERSION 3.25)
 include(CMakePackageConfigHelpers)
 
 project(
-    eecs
+    vesta
     DESCRIPTION "A C++ ECS library focused on efficiency"
     VERSION 0.1.0
     LANGUAGES CXX
 )
 
-add_library(eecs INTERFACE)
-add_library(eecs::eecs ALIAS eecs)
+add_library(vesta INTERFACE)
+add_library(vesta::vesta ALIAS vesta)
 
-target_include_directories(eecs INTERFACE
+target_include_directories(vesta INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/source>
     $<INSTALL_INTERFACE:include>
 )
 
-target_compile_features(eecs INTERFACE cxx_std_20)
+target_compile_features(vesta INTERFACE cxx_std_20)
 
 write_basic_package_version_file(
-    "${CMAKE_CURRENT_BINARY_DIR}/eecsConfigVersion.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/vestaConfigVersion.cmake"
     VERSION ${PROJECT_VERSION}
     COMPATIBILITY SameMajorVersion
 )
 
 configure_package_config_file(
-    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/eecsConfig.cmake.in"
-    "${CMAKE_CURRENT_BINARY_DIR}/eecsConfig.cmake"
-    INSTALL_DESTINATION lib/cmake/eecs
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/vestaConfig.cmake.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/vestaConfig.cmake"
+    INSTALL_DESTINATION lib/cmake/vesta
 )
 
 install(
@@ -37,21 +37,21 @@ install(
 )
 
 install(
-    TARGETS eecs
-    EXPORT eecsTargets
+    TARGETS vesta
+    EXPORT vestaTargets
     INCLUDES DESTINATION include
 )
 
 install(
-    EXPORT eecsTargets
-    FILE eecsTargets.cmake
-    NAMESPACE eecs::
-    DESTINATION lib/cmake/eecs
+    EXPORT vestaTargets
+    FILE vestaTargets.cmake
+    NAMESPACE vesta::
+    DESTINATION lib/cmake/vesta
 )
 
 install(
     FILES
-    "${CMAKE_CURRENT_BINARY_DIR}/eecsConfig.cmake"
-    "${CMAKE_CURRENT_BINARY_DIR}/eecsConfigVersion.cmake"
-    DESTINATION lib/cmake/eecs
+    "${CMAKE_CURRENT_BINARY_DIR}/vestaConfig.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/vestaConfigVersion.cmake"
+    DESTINATION lib/cmake/vesta
 )
