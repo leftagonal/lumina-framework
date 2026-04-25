@@ -4,16 +4,16 @@
 #include <iterator>
 
 namespace vesta::internal {
-    template <bool Const>
+    template <typename T, bool Const>
     class basic_striding_iterator final {
     public:
-        using value_type = std::byte;
+        using value_type = T;
         using reference = std::conditional_t<Const, const value_type, value_type>&;
         using pointer = std::conditional_t<Const, const value_type, value_type>*;
         using difference_type = std::ptrdiff_t;
         using iterator_category = std::random_access_iterator_tag;
 
-        basic_striding_iterator(pointer current, difference_type stride)
+        basic_striding_iterator(std::byte* current, difference_type stride)
             : current_(current), stride_(stride) {
         }
 
@@ -26,19 +26,19 @@ namespace vesta::internal {
         basic_striding_iterator& operator=(basic_striding_iterator&&) noexcept = default;
 
         [[nodiscard]] pointer operator->() {
-            return current_;
+            return std::launder(reinterpret_cast<pointer>(current_));
         }
 
         [[nodiscard]] reference operator*() {
-            return *current_;
+            return *std::launder(reinterpret_cast<pointer>(current_));
         }
 
         [[nodiscard]] pointer operator->() const {
-            return current_;
+            return std::launder(reinterpret_cast<pointer>(current_));
         }
 
         [[nodiscard]] reference operator*() const {
-            return *current_;
+            return *std::launder(reinterpret_cast<pointer>(current_));
         }
 
         [[nodiscard]] friend difference_type operator-(const basic_striding_iterator& a, const basic_striding_iterator& b) {
@@ -46,18 +46,20 @@ namespace vesta::internal {
         }
 
         [[nodiscard]] bool operator==(const basic_striding_iterator&) const = default;
-        [[nodiscard]] auto operator<=>(const basic_striding_iterator& other) const {
 
+        [[nodiscard]] auto operator<=>(const basic_striding_iterator& other) const {
             return current_ <=> other.current_;
         }
 
         basic_striding_iterator& operator+=(difference_type n) {
             current_ += n * stride_;
+
             return *this;
         }
 
         basic_striding_iterator& operator-=(difference_type n) {
             current_ -= n * stride_;
+
             return *this;
         }
 
@@ -106,10 +108,13 @@ namespace vesta::internal {
         }
 
     private:
-        pointer current_;
+        std::byte* current_;
         difference_type stride_;
     };
 
-    using striding_iterator = basic_striding_iterator<false>;
-    using const_striding_iterator = basic_striding_iterator<true>;
+    template <typename T>
+    using striding_iterator = basic_striding_iterator<T, false>;
+
+    template <typename T>
+    using const_striding_iterator = basic_striding_iterator<T, true>;
 }

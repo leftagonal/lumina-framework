@@ -1,6 +1,6 @@
 #pragma once
 
-#include <vesta/iterators/striding_iterator.hpp>
+#include <vesta/structures/striding_iterator.hpp>
 
 #include <algorithm>
 #include <cstddef>
@@ -12,8 +12,8 @@ namespace vesta::internal {
      */
     class allocation final {
     public:
-        using iterator = striding_iterator;
-        using const_iterator = const_striding_iterator;
+        using iterator = striding_iterator<std::byte>;
+        using const_iterator = const_striding_iterator<std::byte>;
 
         allocation() = default;
 

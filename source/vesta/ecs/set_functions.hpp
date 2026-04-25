@@ -49,6 +49,7 @@ namespace vesta::internal {
         }
 
         static void remove(allocation& allocation, index_table& table, index_type sparse) {
+
             std::byte* target = &allocation[table[sparse]];
             std::byte* end = &allocation[allocation.count() - 1];
 

@@ -5,24 +5,17 @@
 
 #include <vesta/ecs/entity.hpp>
 #include <vesta/ecs/set_functions.hpp>
+#include <vesta/ecs/view.hpp>
 
 #include <vesta/traits/pod_type.hpp>
 #include <vesta/traits/type_index.hpp>
 
 namespace vesta {
-    namespace internal {
-        struct ecs_type_context_t {};
-
-        template <>
-        inline constexpr bool is_type_context_v<ecs_type_context_t> = true;
-    }
-
     class registry final {
         using set_functions = internal::set_functions;
         using index_type = entity::value_type;
         using index_table = internal::index_table<index_type>;
         using allocation = internal::allocation;
-        using context_type = internal::ecs_type_context_t;
 
     public:
         registry() = default;
@@ -172,6 +165,16 @@ namespace vesta {
             }
         }
 
+        template <internal::pod_type... Ts>
+        [[nodiscard]] internal::basic_view<false, Ts...> view() {
+            return internal::basic_view<false, Ts...>{&index_tables_, &allocations_, &versions_};
+        }
+
+        template <internal::pod_type... Ts>
+        [[nodiscard]] internal::basic_view<true, Ts...> view() const {
+            return internal::basic_view<true, Ts...>{&index_tables_, &allocations_, &versions_};
+        }
+
     private:
         std::vector<allocation> allocations_;
         std::vector<index_table> index_tables_;
@@ -182,7 +185,7 @@ namespace vesta {
 
         template <internal::pod_type T>
         [[nodiscard]] static std::size_t type_index() {
-            return internal::type_index<context_type, T>();
+            return internal::type_index<internal::ecs_type_context_t, T>();
         }
 
         template <internal::pod_type T>

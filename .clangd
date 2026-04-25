@@ -3,16 +3,7 @@ Diagnostics:
   Suppress:
     - unused-includes
   UnusedIncludes: Strict
-  ClangTidy:
-    Add:
-      - modernize-*
-      - bugprone-*
-      - performance-*
-    Remove:
-      - modernize-use-trailing-return-type
-    CheckOptions:
-      modernize-loop-convert.MinConfidence: reasonable
-
+  
 Index:
   Background: Build
 
