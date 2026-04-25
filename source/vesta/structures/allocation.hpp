@@ -60,9 +60,11 @@ namespace vesta::internal {
          */
         allocation(allocation&& other) noexcept {
             capacity_ = other.capacity_;
+            stride_ = other.stride_;
             size_ = other.size_;
             data_ = other.data_;
 
+            other.stride_ = 0;
             other.capacity_ = 0;
             other.size_ = 0;
             other.data_ = nullptr;
@@ -117,6 +119,7 @@ namespace vesta::internal {
 
             // don't null stride, it must be > 1 anyway
 
+            other.stride_ = 0;
             other.capacity_ = 0;
             other.size_ = 0;
             other.data_ = nullptr;
