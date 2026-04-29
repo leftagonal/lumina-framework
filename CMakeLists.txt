@@ -3,32 +3,40 @@ cmake_minimum_required(VERSION 3.25)
 include(CMakePackageConfigHelpers)
 
 project(
-    vesta
-    DESCRIPTION "A C++ ECS library focused on efficiency"
+    lumina
+    DESCRIPTION "A C++ game framework focused on efficiency and transparency"
     VERSION 0.1.0
     LANGUAGES CXX
 )
 
-add_library(vesta INTERFACE)
-add_library(vesta::vesta ALIAS vesta)
+find_package(glfw3 REQUIRED)
+find_package(Vulkan REQUIRED)
 
-target_include_directories(vesta INTERFACE
+add_library(lumina INTERFACE)
+add_library(lumina::lumina ALIAS lumina)
+
+target_include_directories(lumina INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/source>
     $<INSTALL_INTERFACE:include>
 )
 
-target_compile_features(vesta INTERFACE cxx_std_20)
+target_compile_features(lumina INTERFACE cxx_std_20)
+
+target_link_libraries(lumina INTERFACE
+    glfw
+    Vulkan::Vulkan
+)
 
 write_basic_package_version_file(
-    "${CMAKE_CURRENT_BINARY_DIR}/vestaConfigVersion.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/luminaConfigVersion.cmake"
     VERSION ${PROJECT_VERSION}
     COMPATIBILITY SameMajorVersion
 )
 
 configure_package_config_file(
-    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/vestaConfig.cmake.in"
-    "${CMAKE_CURRENT_BINARY_DIR}/vestaConfig.cmake"
-    INSTALL_DESTINATION lib/cmake/vesta
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/luminaConfig.cmake.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/luminaConfig.cmake"
+    INSTALL_DESTINATION lib/cmake/lumina
 )
 
 install(
@@ -37,21 +45,21 @@ install(
 )
 
 install(
-    TARGETS vesta
-    EXPORT vestaTargets
+    TARGETS lumina
+    EXPORT luminaTargets
     INCLUDES DESTINATION include
 )
 
 install(
-    EXPORT vestaTargets
-    FILE vestaTargets.cmake
-    NAMESPACE vesta::
-    DESTINATION lib/cmake/vesta
+    EXPORT luminaTargets
+    FILE luminaTargets.cmake
+    NAMESPACE lumina::
+    DESTINATION lib/cmake/lumina
 )
 
 install(
     FILES
-    "${CMAKE_CURRENT_BINARY_DIR}/vestaConfig.cmake"
-    "${CMAKE_CURRENT_BINARY_DIR}/vestaConfigVersion.cmake"
-    DESTINATION lib/cmake/vesta
+    "${CMAKE_CURRENT_BINARY_DIR}/luminaConfig.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/luminaConfigVersion.cmake"
+    DESTINATION lib/cmake/lumina
 )

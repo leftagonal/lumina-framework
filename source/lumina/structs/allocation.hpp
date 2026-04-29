@@ -1,45 +1,45 @@
 #pragma once
 
-#include <vesta/structures/striding_iterator.hpp>
+#include <lumina/structs/striding_iterator.hpp>
 
 #include <algorithm>
 #include <cstddef>
 
-namespace vesta::internal {
+namespace lumina::structs {
     /**
      * @brief A resizable region of memory.
      *
      */
-    class allocation final {
+    class Allocation final {
     public:
-        using iterator = striding_iterator<std::byte>;
-        using const_iterator = const_striding_iterator<std::byte>;
+        using iterator = StridingIterator<std::byte>;
+        using const_iterator = ConstStridingIterator<std::byte>;
 
-        allocation() = default;
+        Allocation() = default;
 
         /**
-         * @brief Construct a new allocation object.
+         * @brief Construct a new Allocation object.
          *
          * @param stride The stride to allocate with.
          */
-        allocation(std::size_t stride)
+        Allocation(std::size_t stride)
             : stride_(std::max(stride, 1ul)) {
         }
 
         /**
-         * @brief Destroy the allocation object.
+         * @brief Destroy the Allocation object.
          *
          */
-        ~allocation() {
+        ~Allocation() {
             reset();
         }
 
         /**
-         * @brief Construct a new allocation object.
+         * @brief Construct a new Allocation object.
          *
-         * @param other The allocation to copy data from.
+         * @param other The Allocation to copy data from.
          */
-        allocation(const allocation& other) {
+        Allocation(const Allocation& other) {
             stride_ = other.stride_;
 
             if (!other) {
@@ -54,11 +54,11 @@ namespace vesta::internal {
         }
 
         /**
-         * @brief Construct a new allocation object.
+         * @brief Construct a new Allocation object.
          *
-         * @param other The allocation to move data from.
+         * @param other The Allocation to move data from.
          */
-        allocation(allocation&& other) noexcept {
+        Allocation(Allocation&& other) noexcept {
             capacity_ = other.capacity_;
             stride_ = other.stride_;
             size_ = other.size_;
@@ -71,12 +71,12 @@ namespace vesta::internal {
         }
 
         /**
-         * @brief Copy another allocation into this allocation.
+         * @brief Copy another Allocation into this Allocation.
          *
-         * @param other The allocation to copy data from.
-         * @return allocation& A reference to this allocation.
+         * @param other The Allocation to copy data from.
+         * @return Allocation& A reference to this Allocation.
          */
-        allocation& operator=(const allocation& other) {
+        Allocation& operator=(const Allocation& other) {
             if (&other == this) {
                 return *this;
             }
@@ -102,12 +102,12 @@ namespace vesta::internal {
         }
 
         /**
-         * @brief Move another allocation into this allocation.
+         * @brief Move another Allocation into this Allocation.
          *
-         * @param other The allocation to move data from.
-         * @return allocation& A reference to this allocation.
+         * @param other The Allocation to move data from.
+         * @return Allocation& A reference to this Allocation.
          */
-        allocation& operator=(allocation&& other) noexcept {
+        Allocation& operator=(Allocation&& other) noexcept {
             if (&other == this) {
                 return *this;
             }
@@ -128,13 +128,13 @@ namespace vesta::internal {
         }
 
         /**
-         * @brief Compare two allocations for equality.
+         * @brief Compare two Allocations for equality.
          *
-         * @param other The allocation to compare against.
-         * @return true If the two allocations hold the same data.
-         * @return false If the two allocations do not hold the same data.
+         * @param other The Allocation to compare against.
+         * @return true If the two Allocations hold the same data.
+         * @return false If the two Allocations do not hold the same data.
          */
-        [[nodiscard]] bool operator==(const allocation& other) const {
+        [[nodiscard]] bool operator==(const Allocation& other) const {
             if (size_ != other.size_) {
                 return false;
             }
@@ -143,18 +143,18 @@ namespace vesta::internal {
         }
 
         /**
-         * @brief Compare two allocations for inequality.
+         * @brief Compare two Allocations for inequality.
          *
-         * @param other The allocation to compare against.
-         * @return true If the two allocations do not hold the same data.
-         * @return false If the two allocations hold the same data.
+         * @param other The Allocation to compare against.
+         * @return true If the two Allocations do not hold the same data.
+         * @return false If the two Allocations hold the same data.
          */
-        [[nodiscard]] bool operator!=(const allocation& other) const {
+        [[nodiscard]] bool operator!=(const Allocation& other) const {
             return !(*this == other);
         }
 
         /**
-         * @brief Access memory of the allocation.
+         * @brief Access memory of the Allocation.
          *
          * @param index The index of the aligned block to access.
          * @return std::byte& A reference to the accessed memory.
@@ -164,7 +164,7 @@ namespace vesta::internal {
         }
 
         /**
-         * @brief Access memory of the allocation.
+         * @brief Access memory of the Allocation.
          *
          * @param index The index of the aligned block to access.
          * @return std::byte& A reference to the accessed memory.
@@ -174,9 +174,9 @@ namespace vesta::internal {
         }
 
         /**
-         * @brief Extend the allocation.
+         * @brief Extend the Allocation.
          *
-         * @param count The number of strides to extend the allocation by.
+         * @param count The number of strides to extend the Allocation by.
          */
         void extend(std::size_t count) {
             if (count == 0) {
@@ -186,25 +186,25 @@ namespace vesta::internal {
             std::size_t needed = size_ + (count * stride_);
 
             if (capacity_ < needed) {
-                std::size_t new_capacity = std::max(needed * 2, capacity_ * 2);
-                std::byte* new_data = allocate(new_capacity);
+                std::size_t newCapacity = std::max(needed * 2, capacity_ * 2);
+                std::byte* newData = allocate(newCapacity);
 
                 if (data_) {
-                    std::memcpy(new_data, data_, size_);
+                    std::memcpy(newData, data_, size_);
                     free(data_);
                 }
 
-                data_ = new_data;
-                capacity_ = new_capacity;
+                data_ = newData;
+                capacity_ = newCapacity;
             }
 
             size_ = needed;
         }
 
         /**
-         * @brief Shrink the allocation.
+         * @brief Shrink the Allocation.
          *
-         * @param count The number of strides to shrink the allocation by.
+         * @param count The number of strides to shrink the Allocation by.
          */
         void shrink(std::size_t count) {
             std::size_t delta = count * stride_;
@@ -212,9 +212,9 @@ namespace vesta::internal {
         }
 
         /**
-         * @brief Completely deallocates the allocation.
+         * @brief Completely deallocates the Allocation.
          *
-         * This will invalidate the allocation.
+         * This will invalidate the Allocation.
          */
         void reset() {
             if (data_) {
@@ -228,77 +228,77 @@ namespace vesta::internal {
         }
 
         /**
-         * @brief Prepares the allocation for usage.
+         * @brief Prepares the Allocation for usage.
          *
          * @param stride The stride to use.
          *
-         * The allocation must already be invalidated before initialisation.
+         * The Allocation must already be invalidated before initialisation.
          */
         void initialise(std::size_t stride) {
             stride_ = stride;
         }
 
         /**
-         * @brief Clear the allocation.
+         * @brief Clear the Allocation.
          *
-         * This does not invalidate the allocation.
+         * This does not invalidate the Allocation.
          */
         void clear() {
             size_ = 0;
         }
 
         /**
-         * @brief Returns whether the allocation holds no meaningful data.
+         * @brief Returns whether the Allocation holds no meaningful data.
          *
-         * @return true If the allocation holds accessible data.
-         * @return false If the allocation does not hold accessible data.
+         * @return true If the Allocation holds accessible data.
+         * @return false If the Allocation does not hold accessible data.
          */
         [[nodiscard]] bool empty() const {
             return data_ == nullptr;
         }
 
         /**
-         * @brief Returns whether the allocation is ready to be allocated.
+         * @brief Returns whether the Allocation is ready to be allocated.
          *
-         * @return true If the allocation is ready for allocation.
-         * @return false If the allocation is not ready for allocation.
+         * @return true If the Allocation is ready for Allocation.
+         * @return false If the Allocation is not ready for Allocation.
          */
         [[nodiscard]] bool valid() const {
             return stride_ != 0;
         }
 
         /**
-         * @brief Returns whether the allocation is ready to be allocated.
+         * @brief Returns whether the Allocation is ready to be allocated.
          *
-         * @return true If the allocation is ready for allocation.
-         * @return false If the allocation is not ready for allocation.
+         * @return true If the Allocation is ready for Allocation.
+         * @return false If the Allocation is not ready for Allocation.
          */
         explicit operator bool() const {
             return !valid();
         }
 
         /**
-         * @brief Returns the size of the addressable space of the allocation in bytes.
+         * @brief Returns the size of the addressable space of the Allocation in bytes.
          *
-         * @return std::size_t The addressable space size of the allocation.
+         * @return std::size_t The addressable space size of the Allocation.
          */
         [[nodiscard]] std::size_t size() const {
             return size_;
         }
 
         /**
-         * @brief Returns the size of the allocation's allocated space, including non-addressable space.
+         * @brief Returns the size of the Allocation's allocated space, including non-addressable space.
          *
-         * @return std::size_t The entire capacity of the allocation.
+         * @return std::size_t The entire capacity of the Allocation.
          */
         [[nodiscard]] std::size_t capacity() const {
             return capacity_;
         }
 
         /**
-         * @brief Returns the allocation stride of the allocation.
+         * @brief Returns the Allocation stride of the Allocation.
          *
-         * @return std::size_t The stride of the allocation.
+         * @return std::size_t The stride of the Allocation.
          */
         [[nodiscard]] std::size_t stride() const {
             return stride_;
@@ -314,18 +314,18 @@ namespace vesta::internal {
         }
 
         /**
-         * @brief Returns a pointer to the allocation's memory.
+         * @brief Returns a pointer to the Allocation's memory.
          *
-         * @return std::byte* The allocation's memory.
+         * @return std::byte* The Allocation's memory.
          */
         [[nodiscard]] std::byte* data() {
             return data_;
         }
 
         /**
-         * @brief Returns a pointer to the allocation's memory.
+         * @brief Returns a pointer to the Allocation's memory.
          *
-         * @return std::byte* The allocation's memory.
+         * @return std::byte* The Allocation's memory.
          */
         [[nodiscard]] const std::byte* data() const {
             return data_;
