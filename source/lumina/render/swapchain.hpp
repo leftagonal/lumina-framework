@@ -30,7 +30,8 @@ namespace lumina::render {
         };
 
     public:
-        Swapchain(const SwapchainInfo& info) {
+        Swapchain(const SwapchainInfo& info)
+            : device_(&info.device) {
             SurfaceCapabilities capabilities = getSurfaceCapabilities(info);
             VkSurfaceFormatKHR surfaceFormat = selectSurfaceFormat(info);
 
@@ -77,8 +78,16 @@ namespace lumina::render {
             }
         }
 
+        ~Swapchain() {
+            if (swapchain_) {
+                vkDestroySwapchainKHR(device_->handle(), swapchain_, nullptr);
+                swapchain_ = nullptr;
+            }
+        }
+
     private:
         VkSwapchainKHR swapchain_ = nullptr;
+        Device* device_ = nullptr;
 
         [[nodiscard]] static VkCompositeAlphaFlagBitsKHR selectCompositeAlpha(VkCompositeAlphaFlagsKHR supported) {
             static constexpr VkCompositeAlphaFlagBitsKHR candidates[] = {
