@@ -52,10 +52,10 @@ namespace lumina::render {
             --(*references_);
         }
 
-        PhysicalDevice(const PhysicalDevice&) = delete;
+        PhysicalDevice(const PhysicalDevice&) = default;
         PhysicalDevice(PhysicalDevice&&) = default;
 
-        PhysicalDevice& operator=(const PhysicalDevice&) = delete;
+        PhysicalDevice& operator=(const PhysicalDevice&) = default;
         PhysicalDevice& operator=(PhysicalDevice&&) = default;
 
         [[nodiscard]] PhysicalDeviceProperties properties() const {

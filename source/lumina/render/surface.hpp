@@ -32,6 +32,10 @@ namespace lumina::render {
             return surface_;
         }
 
+        [[nodiscard]] Extent2D extent() const {
+            return window_->extent();
+        }
+
     private:
         VkSurfaceKHR surface_ = nullptr;
         Instance* instance_ = nullptr;

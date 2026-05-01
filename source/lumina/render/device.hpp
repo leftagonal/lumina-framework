@@ -1,6 +1,7 @@
 #pragma once
 
 #include <lumina/render/instance.hpp>
+#include <lumina/render/queue.hpp>
 #include <lumina/render/surface.hpp>
 #include <unordered_map>
 #include <vulkan/vulkan.h>
@@ -27,14 +28,10 @@ namespace lumina::render {
         PhysicalDevice& physicalDevice;
     };
 
-    struct QueueAssignment {
-        std::uint32_t familyIndex;
-        std::uint32_t queueOffset;
-    };
-
     class Device {
     public:
-        Device(const DeviceInfo& info) {
+        Device(const DeviceInfo& info)
+            : physicalDevice_(info.physicalDevice), presentQueue_(nullptr, {}) {
             Families families = getAvailableQueueFamilies(info);
 
             std::vector<std::uint32_t> familyUsage(families.size(), 0);
@@ -124,11 +121,16 @@ namespace lumina::render {
                 std::exit(1);
             }
 
-            auto retrieveQueues = [&](const std::optional<QueueAssignment>& assignment, std::uint32_t count) -> std::vector<VkQueue> {
-                std::vector<VkQueue> queues(count);
+            auto retrieveQueues = [&](const std::optional<QueueAssignment>& assignment, std::uint32_t count) -> std::vector<Queue> {
+                std::vector<Queue> queues;
+
+                queues.reserve(count);
 
                 for (std::uint32_t i = 0; i < count; ++i) {
-                    vkGetDeviceQueue(device_, assignment->familyIndex, assignment->queueOffset + i, &queues[i]);
+                    VkQueue queue;
+
+                    vkGetDeviceQueue(device_, assignment->familyIndex, assignment->queueOffset + i, &queue);
+                    queues.emplace_back(queue, assignment.value());
                 }
 
                 return queues;
@@ -139,7 +141,11 @@ namespace lumina::render {
             transferQueues_ = retrieveQueues(transferAssignment, info.features.transfer.count);
 
             if (info.features.presentation) {
-                vkGetDeviceQueue(device_, presentAssignment->familyIndex, presentAssignment->queueOffset, &presentQueue_);
+                VkQueue queue;
+
+                vkGetDeviceQueue(device_, presentAssignment->familyIndex, presentAssignment->queueOffset, &queue);
+
+                presentQueue_ = Queue(queue, *presentAssignment);
             }
         }
 
@@ -154,6 +160,26 @@ namespace lumina::render {
             return device_;
         }
 
+        [[nodiscard]] PhysicalDevice physicalDevice() const {
+            return physicalDevice_;
+        }
+
+        [[nodiscard]] std::vector<Queue> graphicsQueues() const {
+            return graphicsQueues_;
+        }
+
+        [[nodiscard]] std::vector<Queue> computeQueues() const {
+            return computeQueues_;
+        }
+
+        [[nodiscard]] std::vector<Queue> transferQueues() const {
+            return transferQueues_;
+        }
+
+        [[nodiscard]] Queue presentQueue() const {
+            return presentQueue_;
+        }
+
     private:
         using Families = std::vector<VkQueueFamilyProperties>;
         using Extensions = std::vector<VkExtensionProperties>;
@@ -161,12 +187,12 @@ namespace lumina::render {
         using QueueCountLookup = std::unordered_map<std::uint32_t, std::uint32_t>;
 
         VkDevice device_ = nullptr;
+        PhysicalDevice physicalDevice_;
 
-        std::vector<VkQueue> graphicsQueues_;
-        std::vector<VkQueue> computeQueues_;
-        std::vector<VkQueue> transferQueues_;
-
-        VkQueue presentQueue_;
+        std::vector<Queue> graphicsQueues_;
+        std::vector<Queue> computeQueues_;
+        std::vector<Queue> transferQueues_;
+        Queue presentQueue_;
 
         [[nodiscard]] Families getAvailableQueueFamilies(const DeviceInfo& info) {
             std::uint32_t familyCount = 0;
