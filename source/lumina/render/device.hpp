@@ -35,95 +35,43 @@ namespace lumina::render {
     class Device {
     public:
         Device(const DeviceInfo& info) {
-            std::uint32_t familyCount = 0;
+            Families families = getAvailableQueueFamilies(info);
 
-            vkGetPhysicalDeviceQueueFamilyProperties(info.physicalDevice.handle(), &familyCount, nullptr);
+            std::vector<std::uint32_t> familyUsage(families.size(), 0);
 
-            std::vector<VkQueueFamilyProperties> families(familyCount);
+            auto graphicsAssignment = assignQueues(families, familyUsage, VK_QUEUE_GRAPHICS_BIT, info.features.graphics.count);
+            auto computeAssignment = assignQueues(families, familyUsage, VK_QUEUE_COMPUTE_BIT, info.features.compute.count);
+            auto transferAssignment = assignQueues(families, familyUsage, VK_QUEUE_TRANSFER_BIT, info.features.transfer.count);
 
-            vkGetPhysicalDeviceQueueFamilyProperties(info.physicalDevice.handle(), &familyCount, families.data());
+            std::optional<QueueAssignment> presentAssignment;
 
-            std::vector<std::uint32_t> familyUsed(familyCount, 0);
-
-            auto findFamily = [&](VkQueueFlags required) -> std::optional<std::uint32_t> {
-                for (std::uint32_t i = 0; i < familyCount; ++i) {
-                    if ((families[i].queueFlags & required) == required && familyUsed[i] < families[i].queueCount) {
-                        return i;
-                    }
-                }
-
-                return std::nullopt;
-            };
-
-            auto assignQueues = [&](VkQueueFlags required, std::uint32_t count) -> std::optional<QueueAssignment> {
-                if (count == 0) {
-                    return std::nullopt;
-                }
-                auto family = findFamily(required);
-
-                if (!family) {
-                    return std::nullopt;
-                }
-
-                QueueAssignment a{*family, familyUsed[*family]};
-                familyUsed[*family] += count;
-                return a;
-            };
-
-            auto graphicsAssign = assignQueues(VK_QUEUE_GRAPHICS_BIT, info.features.graphics.count);
-            auto computeAssign = assignQueues(VK_QUEUE_COMPUTE_BIT, info.features.compute.count);
-            auto transferAssign = assignQueues(VK_QUEUE_TRANSFER_BIT, info.features.transfer.count);
-
-            std::optional<QueueAssignment> presentAssign;
             if (info.features.presentation) {
-                auto& surf = info.features.presentation->surface;
-
-                auto tryPresent = [&](const std::optional<QueueAssignment>& a) -> bool {
-                    if (!a) {
-                        return false;
-                    }
-
-                    VkBool32 supported = VK_FALSE;
-                    vkGetPhysicalDeviceSurfaceSupportKHR(info.physicalDevice.handle(), a->familyIndex, surf.handle(), &supported);
-
-                    if (supported) {
-                        presentAssign = a;
-                        return true;
-                    }
-
-                    return false;
-                };
-
-                if (!tryPresent(graphicsAssign) && !tryPresent(computeAssign) && !tryPresent(transferAssign)) {
+                if (!tryPresent(presentAssignment, info, graphicsAssignment) &&
+                    !tryPresent(presentAssignment, info, computeAssignment) &&
+                    !tryPresent(presentAssignment, info, transferAssignment)) {
                     std::printf("error: no assigned queue family supports presentation\n");
                     std::exit(1);
                 }
             }
 
-            if ((info.features.graphics.count > 0 && !graphicsAssign) ||
-                (info.features.compute.count > 0 && !computeAssign) ||
-                (info.features.transfer.count > 0 && !transferAssign)) {
+            if ((info.features.graphics.count > 0 && !graphicsAssignment) ||
+                (info.features.compute.count > 0 && !computeAssignment) ||
+                (info.features.transfer.count > 0 && !transferAssignment)) {
                 std::printf("error: physical device does not satisfy queue requirements\n");
                 std::exit(1);
             }
 
-            std::unordered_map<std::uint32_t, std::uint32_t> familyQueueCount;
+            QueueCountLookup familyQueueCount;
 
-            auto registerFamily = [&](const std::optional<QueueAssignment>& a, std::uint32_t count) {
-                if (a) {
-                    familyQueueCount[a->familyIndex] = std::max(familyQueueCount[a->familyIndex], a->queueOffset + count);
-                }
-            };
-
-            registerFamily(graphicsAssign, info.features.graphics.count);
-            registerFamily(computeAssign, info.features.compute.count);
-            registerFamily(transferAssign, info.features.transfer.count);
+            registerFamily(familyQueueCount, graphicsAssignment, info.features.graphics.count);
+            registerFamily(familyQueueCount, computeAssignment, info.features.compute.count);
+            registerFamily(familyQueueCount, transferAssignment, info.features.transfer.count);
 
             if (info.features.presentation) {
-                registerFamily(presentAssign, 1);
+                registerFamily(familyQueueCount, presentAssignment, 1);
             }
 
-            std::vector<float> priorities(familyCount, 1.0f);
+            std::vector<float> priorities(families.size(), 1.0f);
 
             std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
 
@@ -138,27 +86,9 @@ namespace lumina::render {
                 });
             }
 
-            std::uint32_t extensionCount = 0;
-
-            VkResult result = vkEnumerateDeviceExtensionProperties(info.physicalDevice.handle(), nullptr, &extensionCount, nullptr);
-
-            if (result != VK_SUCCESS) {
-                std::printf("error: failed to enumerate device extensions\n");
-                std::exit(1);
-            }
-
-            std::vector<VkExtensionProperties> extensions(extensionCount);
-
-            result = vkEnumerateDeviceExtensionProperties(info.physicalDevice.handle(), nullptr, &extensionCount, extensions.data());
-
-            if (result != VK_SUCCESS) {
-                std::printf("error: failed to enumerate device extensions\n");
-                std::exit(1);
-            }
-
+            Extensions extensions = getExtensions(info);
+            Names selectedExtensions;
             bool swapchainSupported = false;
-
-            std::vector<const char*> selectedExtensions;
 
             constexpr const char* Swapchain = VK_KHR_SWAPCHAIN_EXTENSION_NAME;
 
@@ -187,7 +117,7 @@ namespace lumina::render {
                 .pEnabledFeatures = nullptr,
             };
 
-            result = vkCreateDevice(info.physicalDevice.handle(), &createInfo, nullptr, &device_);
+            VkResult result = vkCreateDevice(info.physicalDevice.handle(), &createInfo, nullptr, &device_);
 
             if (result != VK_SUCCESS) {
                 std::printf("error: failed to create device\n");
@@ -204,12 +134,12 @@ namespace lumina::render {
                 return queues;
             };
 
-            graphicsQueues_ = retrieveQueues(graphicsAssign, info.features.graphics.count);
-            computeQueues_ = retrieveQueues(computeAssign, info.features.compute.count);
-            transferQueues_ = retrieveQueues(transferAssign, info.features.transfer.count);
+            graphicsQueues_ = retrieveQueues(graphicsAssignment, info.features.graphics.count);
+            computeQueues_ = retrieveQueues(computeAssignment, info.features.compute.count);
+            transferQueues_ = retrieveQueues(transferAssignment, info.features.transfer.count);
 
             if (info.features.presentation) {
-                vkGetDeviceQueue(device_, presentAssign->familyIndex, presentAssign->queueOffset, &presentQueue_);
+                vkGetDeviceQueue(device_, presentAssignment->familyIndex, presentAssignment->queueOffset, &presentQueue_);
             }
         }
 
@@ -225,6 +155,11 @@ namespace lumina::render {
         }
 
     private:
+        using Families = std::vector<VkQueueFamilyProperties>;
+        using Extensions = std::vector<VkExtensionProperties>;
+        using Names = std::vector<const char*>;
+        using QueueCountLookup = std::unordered_map<std::uint32_t, std::uint32_t>;
+
         VkDevice device_ = nullptr;
 
         std::vector<VkQueue> graphicsQueues_;
@@ -232,5 +167,93 @@ namespace lumina::render {
         std::vector<VkQueue> transferQueues_;
 
         VkQueue presentQueue_;
+
+        [[nodiscard]] Families getAvailableQueueFamilies(const DeviceInfo& info) {
+            std::uint32_t familyCount = 0;
+
+            vkGetPhysicalDeviceQueueFamilyProperties(info.physicalDevice.handle(), &familyCount, nullptr);
+
+            Families families(familyCount);
+
+            vkGetPhysicalDeviceQueueFamilyProperties(info.physicalDevice.handle(), &familyCount, families.data());
+
+            return families;
+        }
+
+        [[nodiscard]] static std::optional<std::uint32_t> findFamily(const Families& families, std::vector<std::uint32_t>& familyUsed, VkQueueFlags required) {
+            for (std::uint32_t i = 0; i < families.size(); ++i) {
+                if ((families[i].queueFlags & required) == required && familyUsed[i] < families[i].queueCount) {
+                    return i;
+                }
+            }
+
+            return std::nullopt;
+        };
+
+        [[nodiscard]] static std::optional<QueueAssignment> assignQueues(const Families& families, std::vector<std::uint32_t>& familyUsed, VkQueueFlags required, std::uint32_t count) {
+            if (count == 0) {
+                return std::nullopt;
+            }
+
+            auto family = findFamily(families, familyUsed, required);
+
+            if (!family) {
+                return std::nullopt;
+            }
+
+            QueueAssignment assignment = {
+                .familyIndex = family.value(),
+                .queueOffset = familyUsed[family.value()],
+            };
+
+            familyUsed[family.value()] += count;
+
+            return assignment;
+        };
+
+        [[nodiscard]] static bool tryPresent(std::optional<QueueAssignment>& writeback, const DeviceInfo& info, const std::optional<QueueAssignment>& assignment) {
+            if (!assignment) {
+                return false;
+            }
+
+            VkBool32 supported = VK_FALSE;
+            vkGetPhysicalDeviceSurfaceSupportKHR(info.physicalDevice.handle(), assignment->familyIndex, info.features.presentation->surface.handle(), &supported);
+
+            if (supported) {
+                writeback = assignment;
+
+                return true;
+            }
+
+            return false;
+        };
+
+        void registerFamily(QueueCountLookup& lookup, const std::optional<QueueAssignment>& assignment, std::uint32_t count) {
+            if (assignment) {
+                lookup[assignment->familyIndex] = std::max(lookup[assignment->familyIndex], assignment->queueOffset + count);
+            }
+        };
+
+        [[nodiscard]] Extensions getExtensions(const DeviceInfo& info) {
+            std::uint32_t extensionCount = 0;
+
+            VkResult result = vkEnumerateDeviceExtensionProperties(info.physicalDevice.handle(), nullptr, &extensionCount, nullptr);
+
+            if (result != VK_SUCCESS) {
+                std::printf("error: failed to enumerate device extensions\n");
+                std::exit(1);
+            }
+
+            std::vector<VkExtensionProperties> extensions(extensionCount);
+
+            result = vkEnumerateDeviceExtensionProperties(info.physicalDevice.handle(), nullptr, &extensionCount, extensions.data());
+
+            if (result != VK_SUCCESS) {
+                std::printf("error: failed to enumerate device extensions\n");
+                std::exit(1);
+            }
+
+            return extensions;
+        }
     };
 }
