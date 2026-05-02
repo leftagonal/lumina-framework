@@ -42,7 +42,7 @@ namespace lumina::render {
                 .imageExtent = capabilities.extent,
                 .imageArrayLayers = 1,
                 .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-                .imageSharingMode = VK_SHARING_MODE_CONCURRENT,
+                .imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
                 .pQueueFamilyIndices = nullptr,
                 .preTransform = capabilities.transform,
                 .compositeAlpha = capabilities.compositeAlpha,
@@ -62,7 +62,7 @@ namespace lumina::render {
             };
 
             if (needsExclusive) {
-                createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+                createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
                 createInfo.pQueueFamilyIndices = familyIndices.data();
             }
 
