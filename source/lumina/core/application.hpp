@@ -13,15 +13,15 @@ namespace lumina {
         std::uint32_t patch;
     };
 
-    struct ApplicationInfo {
+    struct ApplicationConfig {
         std::string name;
         Version version;
     };
 
     class Application {
     public:
-        Application(const ApplicationInfo& info)
-            : name_(info.name), version_(info.version) {
+        Application(const ApplicationConfig& config)
+            : name_(config.name), version_(config.version) {
             glfwInit();
 
             // disable automatic OpenGL contexts for windows

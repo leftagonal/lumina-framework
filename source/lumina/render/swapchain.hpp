@@ -12,11 +12,7 @@ namespace lumina::render {
         Immediate,
     };
 
-    struct SwapchainInfo {
-        Device& device;
-        Surface& surface;
-        Queue& graphicsQueue;
-        Queue& presentQueue;
+    struct SwapchainConfig {
         SwapchainPresentMode presentMode;
         std::uint32_t minimumImageCount;
     };
@@ -30,16 +26,16 @@ namespace lumina::render {
         };
 
     public:
-        Swapchain(const SwapchainInfo& info)
-            : device_(&info.device) {
-            SurfaceCapabilities capabilities = getSurfaceCapabilities(info);
-            VkSurfaceFormatKHR surfaceFormat = selectSurfaceFormat(info);
+        Swapchain(Device& device, Surface& surface, Queue& graphicsQueue, Queue& presentQueue, const SwapchainConfig& config)
+            : device_(&device), surface_(&surface) {
+            SurfaceCapabilities capabilities = getSurfaceCapabilities(config);
+            VkSurfaceFormatKHR surfaceFormat = selectSurfaceFormat();
 
             VkSwapchainCreateInfoKHR createInfo = {
                 .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
                 .pNext = nullptr,
                 .flags = 0,
-                .surface = info.surface.handle(),
+                .surface = surface_->handle(),
                 .minImageCount = capabilities.minimumImageCount,
                 .imageFormat = surfaceFormat.format,
                 .imageColorSpace = surfaceFormat.colorSpace,
@@ -50,13 +46,13 @@ namespace lumina::render {
                 .pQueueFamilyIndices = nullptr,
                 .preTransform = capabilities.transform,
                 .compositeAlpha = capabilities.compositeAlpha,
-                .presentMode = selectPresentMode(info),
+                .presentMode = selectPresentMode(config),
                 .clipped = VK_TRUE,
                 .oldSwapchain = nullptr,
             };
 
-            QueueAssignment graphicsAssignment = info.graphicsQueue.assignment();
-            QueueAssignment presentAssignment = info.presentQueue.assignment();
+            QueueAssignment graphicsAssignment = graphicsQueue.assignment();
+            QueueAssignment presentAssignment = presentQueue.assignment();
 
             bool needsExclusive = graphicsAssignment.familyIndex != presentAssignment.familyIndex;
 
@@ -70,7 +66,7 @@ namespace lumina::render {
                 createInfo.pQueueFamilyIndices = familyIndices.data();
             }
 
-            VkResult result = vkCreateSwapchainKHR(info.device.handle(), &createInfo, nullptr, &swapchain_);
+            VkResult result = vkCreateSwapchainKHR(device_->handle(), &createInfo, nullptr, &swapchain_);
 
             if (result != VK_SUCCESS) {
                 std::printf("error: failed to create swapchain\n");
@@ -87,7 +83,9 @@ namespace lumina::render {
 
     private:
         VkSwapchainKHR swapchain_ = nullptr;
-        Device* device_ = nullptr;
+
+        Device* device_;
+        Surface* surface_;
 
         [[nodiscard]] static VkCompositeAlphaFlagBitsKHR selectCompositeAlpha(VkCompositeAlphaFlagsKHR supported) {
             static constexpr VkCompositeAlphaFlagBitsKHR candidates[] = {
@@ -106,25 +104,25 @@ namespace lumina::render {
             return VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
         }
 
-        [[nodiscard]] static SurfaceCapabilities getSurfaceCapabilities(const SwapchainInfo& info) {
-            VkPhysicalDevice physicalDevice = info.device.physicalDevice().handle();
-            VkSurfaceKHR surface = info.surface.handle();
+        [[nodiscard]] SurfaceCapabilities getSurfaceCapabilities(const SwapchainConfig& config) {
+            VkPhysicalDevice physicalDevice = device_->physicalDevice().handle();
+            VkSurfaceKHR surface = surface_->handle();
 
             VkSurfaceCapabilitiesKHR surfaceCapabilities;
 
             vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, &surfaceCapabilities);
 
             return {
-                .minimumImageCount = std::clamp(info.minimumImageCount, surfaceCapabilities.minImageCount, surfaceCapabilities.maxImageCount),
+                .minimumImageCount = std::clamp(config.minimumImageCount, surfaceCapabilities.minImageCount, surfaceCapabilities.maxImageCount),
                 .extent = surfaceCapabilities.currentExtent,
                 .transform = surfaceCapabilities.currentTransform,
                 .compositeAlpha = selectCompositeAlpha(surfaceCapabilities.supportedCompositeAlpha),
             };
         }
 
-        [[nodiscard]] static VkPresentModeKHR selectPresentMode(const SwapchainInfo& info) {
-            VkPhysicalDevice physicalDevice = info.device.physicalDevice().handle();
-            VkSurfaceKHR surface = info.surface.handle();
+        [[nodiscard]] VkPresentModeKHR selectPresentMode(const SwapchainConfig& config) {
+            VkPhysicalDevice physicalDevice = device_->physicalDevice().handle();
+            VkSurfaceKHR surface = surface_->handle();
 
             std::uint32_t presentModeCount = 0;
 
@@ -151,7 +149,7 @@ namespace lumina::render {
                 {SwapchainPresentMode::Synchronous, VK_PRESENT_MODE_FIFO_KHR},
             };
 
-            auto start = std::ranges::find(chain, info.presentMode, &std::pair<SwapchainPresentMode, VkPresentModeKHR>::first);
+            auto start = std::ranges::find(chain, config.presentMode, &std::pair<SwapchainPresentMode, VkPresentModeKHR>::first);
 
             for (auto it = start; it != std::end(chain); ++it) {
                 if (std::ranges::find(presentModes, it->second) != presentModes.end()) {
@@ -162,9 +160,9 @@ namespace lumina::render {
             return VK_PRESENT_MODE_FIFO_KHR;
         }
 
-        [[nodiscard]] static VkSurfaceFormatKHR selectSurfaceFormat(const SwapchainInfo& info) {
-            VkPhysicalDevice physicalDevice = info.device.physicalDevice().handle();
-            VkSurfaceKHR surface = info.surface.handle();
+        [[nodiscard]] VkSurfaceFormatKHR selectSurfaceFormat() {
+            VkPhysicalDevice physicalDevice = device_->physicalDevice().handle();
+            VkSurfaceKHR surface = surface_->handle();
 
             std::uint32_t surfaceFormatCount = 0;
 

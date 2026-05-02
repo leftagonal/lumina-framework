@@ -14,16 +14,18 @@ namespace lumina::render {
         std::uint32_t height;
     };
 
-    struct WindowInfo {
-        Application& application;
-        Extent2D extent;
+    struct WindowConfig {
         std::string_view title;
+        bool resizable;
+        Extent2D extent;
     };
 
     class Window {
     public:
-        Window(const WindowInfo& info)
-            : title_(info.title), extent_(info.extent) {
+        Window(Application&, const WindowConfig& config)
+            : title_(config.title), extent_(config.extent) {
+            glfwWindowHint(GLFW_RESIZABLE, config.resizable);
+
             window_ = glfwCreateWindow(
                 static_cast<int>(extent_.width),
                 static_cast<int>(extent_.height),
@@ -48,8 +50,8 @@ namespace lumina::render {
             }
         }
 
-        [[nodiscard]] bool closeSignalled() const {
-            return closeSignalled_;
+        [[nodiscard]] bool alive() const {
+            return !closeSignalled_;
         }
 
         [[nodiscard]] Extent2D extent() const {

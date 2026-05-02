@@ -1,32 +1,35 @@
 #pragma once
 
+#include "queue.hpp"
+
 #include <cstdint>
+#include <span>
 #include <string_view>
-#include <vulkan/vulkan.h>
+#include <vector>
 
 namespace lumina::render {
-    enum class DeviceType {
+    enum class PhysicalDeviceType {
         Other,
-        IntegratedGPU,
-        DiscreteGPU,
-        VirtualGPU,
-        CPU,
+        Integrated,
+        Dedicated,
+        Virtual,
+        Software,
     };
 
-    struct DeviceLimits {
-        std::uint32_t maxImageDimension1D;
-        std::uint32_t maxImageDimension2D;
-        std::uint32_t maxImageDimension3D;
-        std::uint32_t maxUniformBufferRange;
-        std::uint32_t maxStorageBufferRange;
-        std::uint32_t maxPushConstantsSize;
-        std::uint32_t maxMemoryAllocationCount;
-        std::uint32_t maxBoundDescriptorSets;
-        std::uint32_t maxComputeWorkGroupInvocations;
-        std::uint32_t maxViewports;
+    struct PhysicalDeviceLimits {
+        std::uint32_t maximumImageDimension1D;
+        std::uint32_t maximumImageDimension2D;
+        std::uint32_t maximumImageDimension3D;
+        std::uint32_t maximumUniformBufferRange;
+        std::uint32_t maximumStorageBufferRange;
+        std::uint32_t maximumPushConstantsSize;
+        std::uint32_t maximumMemoryAllocationCount;
+        std::uint32_t maximumBoundDescriptorSets;
+        std::uint32_t maximumComputeWorkGroupInvocations;
+        std::uint32_t maximumViewports;
 
-        float maxSamplerAnisotropy;
-        float maxSamplerLodBias;
+        float maximumSamplerAnisotropy;
+        float maximumSamplerLODBias;
     };
 
     struct PhysicalDeviceProperties {
@@ -35,21 +38,42 @@ namespace lumina::render {
         std::uint32_t deviceID;
         std::uint32_t driverVersion;
         std::uint32_t apiVersion;
-        DeviceType deviceType;
-        DeviceLimits limits;
+        PhysicalDeviceType deviceType;
+        PhysicalDeviceLimits limits;
     };
 
     class PhysicalDevice {
     public:
-        PhysicalDevice(VkPhysicalDevice physicalDevice, std::uint32_t* references)
-            : physicalDevice_(physicalDevice), references_(references) {
+        PhysicalDevice(VkPhysicalDevice physicalDevice)
+            : physicalDevice_(physicalDevice) {
             vkGetPhysicalDeviceProperties(physicalDevice_, &properties_);
 
-            ++(*references_);
+            std::uint32_t familyCount = 0;
+
+            vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice_, &familyCount, nullptr);
+
+            std::vector<VkQueueFamilyProperties> families(familyCount);
+            queueFamilies_.reserve(familyCount);
+
+            vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice_, &familyCount, families.data());
+
+            for (std::uint32_t i = 0; i < familyCount; ++i) {
+                queueFamilies_.emplace_back(QueueFamily{
+                    .definition = QueueFamilyDefinition{
+                        .index = i,
+                        .members = families[i].queueCount,
+                    },
+                    .features = QueueFamilyFeatures{
+                        .graphics = (families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) == 1,
+                        .transfer = (families[i].queueFlags & VK_QUEUE_TRANSFER_BIT) == 1,
+                        .compute = (families[i].queueFlags & VK_QUEUE_COMPUTE_BIT) == 1,
+                    },
+                });
+            }
         }
 
         ~PhysicalDevice() {
-            --(*references_);
+            physicalDevice_ = nullptr;
         }
 
         PhysicalDevice(const PhysicalDevice&) = default;
@@ -68,19 +92,19 @@ namespace lumina::render {
                 .driverVersion = properties_.driverVersion,
                 .apiVersion = properties_.apiVersion,
                 .deviceType = mapDeviceType(properties_.deviceType),
-                .limits = DeviceLimits{
-                    .maxImageDimension1D = limits.maxImageDimension1D,
-                    .maxImageDimension2D = limits.maxImageDimension2D,
-                    .maxImageDimension3D = limits.maxImageDimension3D,
-                    .maxUniformBufferRange = limits.maxUniformBufferRange,
-                    .maxStorageBufferRange = limits.maxStorageBufferRange,
-                    .maxPushConstantsSize = limits.maxPushConstantsSize,
-                    .maxMemoryAllocationCount = limits.maxMemoryAllocationCount,
-                    .maxBoundDescriptorSets = limits.maxBoundDescriptorSets,
-                    .maxComputeWorkGroupInvocations = limits.maxComputeWorkGroupInvocations,
-                    .maxViewports = limits.maxViewports,
-                    .maxSamplerAnisotropy = limits.maxSamplerAnisotropy,
-                    .maxSamplerLodBias = limits.maxSamplerLodBias,
+                .limits = PhysicalDeviceLimits{
+                    .maximumImageDimension1D = limits.maxImageDimension1D,
+                    .maximumImageDimension2D = limits.maxImageDimension2D,
+                    .maximumImageDimension3D = limits.maxImageDimension3D,
+                    .maximumUniformBufferRange = limits.maxUniformBufferRange,
+                    .maximumStorageBufferRange = limits.maxStorageBufferRange,
+                    .maximumPushConstantsSize = limits.maxPushConstantsSize,
+                    .maximumMemoryAllocationCount = limits.maxMemoryAllocationCount,
+                    .maximumBoundDescriptorSets = limits.maxBoundDescriptorSets,
+                    .maximumComputeWorkGroupInvocations = limits.maxComputeWorkGroupInvocations,
+                    .maximumViewports = limits.maxViewports,
+                    .maximumSamplerAnisotropy = limits.maxSamplerAnisotropy,
+                    .maximumSamplerLODBias = limits.maxSamplerLodBias,
                 },
             };
         }
@@ -89,27 +113,50 @@ namespace lumina::render {
             return physicalDevice_;
         }
 
+        void acquire() {
+            ++acquisitions_;
+        }
+
+        void release() {
+            if (acquisitions_ == 0) {
+                return;
+            }
+
+            --acquisitions_;
+        }
+
+        [[nodiscard]] std::size_t acquisitions() const {
+            return acquisitions_;
+        }
+
+        [[nodiscard]] std::span<const QueueFamily> queueFamilies() const {
+            return queueFamilies_;
+        }
+
     private:
         VkPhysicalDevice physicalDevice_;
-        VkPhysicalDeviceProperties properties_;
-        std::uint32_t* references_;
+        VkPhysicalDeviceProperties properties_ = {};
 
-        [[nodiscard]] static DeviceType mapDeviceType(VkPhysicalDeviceType type) {
+        std::vector<QueueFamily> queueFamilies_;
+
+        std::size_t acquisitions_ = 0;
+
+        [[nodiscard]] static PhysicalDeviceType mapDeviceType(VkPhysicalDeviceType type) {
             switch (type) {
                 case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU: {
-                    return DeviceType::IntegratedGPU;
+                    return PhysicalDeviceType::Integrated;
                 }
                 case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU: {
-                    return DeviceType::DiscreteGPU;
+                    return PhysicalDeviceType::Dedicated;
                 }
                 case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU: {
-                    return DeviceType::VirtualGPU;
+                    return PhysicalDeviceType::Virtual;
                 }
                 case VK_PHYSICAL_DEVICE_TYPE_CPU: {
-                    return DeviceType::CPU;
+                    return PhysicalDeviceType::Software;
                 }
                 default: {
-                    return DeviceType::Other;
+                    return PhysicalDeviceType::Other;
                 }
             }
         }

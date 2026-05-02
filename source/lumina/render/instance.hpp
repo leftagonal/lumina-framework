@@ -15,23 +15,19 @@ namespace lumina::render {
         bool debugging;
     };
 
-    struct InstanceInfo {
-        Application& application;
-        InstanceFeatures features;
-    };
-
     enum class PhysicalDeviceRequest {
         MostCapable,
         LeastCapable,
-        NextAvailable,
+        NextBestAvailable,
+        NextWorstAvailable,
     };
 
     class Instance {
     public:
-        Instance(const InstanceInfo& info) {
+        Instance(const Application& application, const InstanceFeatures& features) {
             Extensions availableExtensions = getSupportedExtensions();
             Names platformExtensions = getPlatformExtensions();
-            Names requiredExtensions = getRequiredExtensions(info, platformExtensions);
+            Names requiredExtensions = getRequiredExtensions(features, platformExtensions);
 
             if (!supportsRequestedExtensions(availableExtensions, requiredExtensions)) {
                 std::printf("error: not all required instance extensions are supported\n");
@@ -39,12 +35,12 @@ namespace lumina::render {
             }
 
             Layers availableLayers = getSupportedLayers();
-            Names requiredLayers = getRequiredLayers(info, availableLayers);
+            Names requiredLayers = getRequiredLayers(features, availableLayers);
 
             std::uint32_t applicationVersion = VK_MAKE_VERSION(
-                info.application.version().major,
-                info.application.version().minor,
-                info.application.version().patch);
+                application.version().major,
+                application.version().minor,
+                application.version().patch);
 
             std::uint32_t apiVersion = getApiVersion();
 
@@ -56,7 +52,7 @@ namespace lumina::render {
             VkApplicationInfo applicationInfo = {
                 .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
                 .pNext = nullptr,
-                .pApplicationName = info.application.name().data(),
+                .pApplicationName = application.name().data(),
                 .applicationVersion = applicationVersion,
                 .pEngineName = nullptr,
                 .engineVersion = engineVersion,
@@ -91,7 +87,67 @@ namespace lumina::render {
             }
         }
 
-        [[nodiscard]] PhysicalDevice acquirePhysicalDevice(PhysicalDeviceRequest request) {
+        [[nodiscard]] PhysicalDevice& acquirePhysicalDevice(PhysicalDeviceRequest request) {
+            if (physicalDevices_.empty()) {
+                std::printf("error: no physical devices detected\n");
+                std::exit(1);
+            }
+
+            std::size_t index = 0;
+
+            switch (request) {
+                case PhysicalDeviceRequest::MostCapable: {
+                    index = 0;
+
+                    break;
+                }
+                case PhysicalDeviceRequest::LeastCapable: {
+                    index = physicalDevices_.size() - 1;
+
+                    break;
+                }
+                case PhysicalDeviceRequest::NextBestAvailable: {
+                    // begin with the first device
+                    index = 0;
+
+                    // forward iteration starts at the most capable and moves to the least capable
+                    for (std::size_t i = 1; i < physicalDevices_.size(); ++i) {
+                        auto& current = physicalDevices_[index];
+                        auto& candidate = physicalDevices_[i];
+
+                        // progressively see if there are devices that have fewer acquisitions
+                        // if one has fewer acquisitions, cache its index
+                        if (candidate.acquisitions() < current.acquisitions()) {
+                            index = i;
+                        }
+                    }
+
+                    break;
+                }
+                case PhysicalDeviceRequest::NextWorstAvailable: {
+                    // begin with the last device
+                    index = physicalDevices_.size() - 1;
+
+                    // reverse iteration starts at the least capable and moves to the most capable
+                    for (std::size_t i = physicalDevices_.size() - 1; i-- > 0;) {
+                        auto& current = physicalDevices_[index];
+                        auto& candidate = physicalDevices_[i];
+
+                        // progressively see if there are devices that have fewer acquisitions
+                        // if one has fewer acquisitions, cache its index
+                        if (candidate.acquisitions() < current.acquisitions()) {
+                            index = i;
+                        }
+                    }
+
+                    break;
+                }
+            }
+
+            return physicalDevices_[index];
+        }
+
+        [[nodiscard]] const PhysicalDevice& acquirePhysicalDevice(PhysicalDeviceRequest request) const {
             if (physicalDevices_.empty()) {
                 std::printf("error: no physical devices detected\n");
                 std::exit(1);
@@ -108,19 +164,45 @@ namespace lumina::render {
                     index = physicalDevices_.size() - 1;
                     break;
                 }
-                case PhysicalDeviceRequest::NextAvailable: {
-                    for (std::size_t i = 0; i < physicalDevices_.size(); ++i) {
-                        if (deviceReferences_[index] > deviceReferences_[i]) {
+                case PhysicalDeviceRequest::NextBestAvailable: {
+                    // begin with the first device
+                    index = 0;
+
+                    // forward iteration starts at the most capable and moves to the least capable
+                    for (std::size_t i = 1; i < physicalDevices_.size(); ++i) {
+                        auto& current = physicalDevices_[index];
+                        auto& candidate = physicalDevices_[i];
+
+                        // progressively see if there are devices that have fewer acquisitions
+                        // if one has fewer acquisitions, cache its index
+                        if (candidate.acquisitions() < current.acquisitions()) {
                             index = i;
                         }
                     }
+
+                    break;
+                }
+                case PhysicalDeviceRequest::NextWorstAvailable: {
+                    // begin with the last device
+                    index = physicalDevices_.size() - 1;
+
+                    // reverse iteration starts at the least capable and moves to the most capable
+                    for (std::size_t i = physicalDevices_.size() - 1; i-- > 0;) {
+                        auto& current = physicalDevices_[index];
+                        auto& candidate = physicalDevices_[i];
+
+                        // progressively see if there are devices that have fewer acquisitions
+                        // if one has fewer acquisitions, cache its index
+                        if (candidate.acquisitions() < current.acquisitions()) {
+                            index = i;
+                        }
+                    }
+
+                    break;
                 }
             }
 
-            return PhysicalDevice{
-                physicalDevices_[index],
-                &deviceReferences_[index],
-            };
+            return physicalDevices_[index];
         }
 
         [[nodiscard]] VkInstance handle() const {
@@ -131,11 +213,10 @@ namespace lumina::render {
         using Names = std::vector<const char*>;
         using Extensions = std::vector<VkExtensionProperties>;
         using Layers = std::vector<VkLayerProperties>;
-        using PhysicalDevices = std::vector<VkPhysicalDevice>;
-        using DeviceReferences = std::vector<std::uint32_t>;
+
+        using PhysicalDevices = std::vector<PhysicalDevice>;
 
         PhysicalDevices physicalDevices_;
-        DeviceReferences deviceReferences_;
         VkInstance instance_ = nullptr;
         bool portability_ = false;
 
@@ -199,7 +280,7 @@ namespace lumina::render {
             };
         }
 
-        [[nodiscard]] Names getRequiredExtensions(const InstanceInfo& info, const Names& candidates) {
+        [[nodiscard]] Names getRequiredExtensions(const InstanceFeatures& features, const Names& candidates) {
             Names requiredExtensions;
 
             constexpr const char* PortabilityEnumeration = "VK_KHR_portability_enumeration";
@@ -211,7 +292,7 @@ namespace lumina::render {
 
                 // any required extensions should be included if requested
                 // this excludes portability extensions since they are always neededa
-                if (info.features.platformIntegration && !isPortabilityEnumeration) {
+                if (features.platformIntegration && !isPortabilityEnumeration) {
                     requiredExtensions.emplace_back(extension);
                 }
             }
@@ -223,7 +304,7 @@ namespace lumina::render {
             return requiredExtensions;
         }
 
-        [[nodiscard]] Names getRequiredLayers(const InstanceInfo& info, const Layers& supported) {
+        [[nodiscard]] Names getRequiredLayers(const InstanceFeatures& features, const Layers& supported) {
             Names requiredLayers;
 
             bool foundValidation = false;
@@ -236,7 +317,7 @@ namespace lumina::render {
                 foundValidation = foundValidation || isValidation;
             }
 
-            if (info.features.validation) {
+            if (features.validation) {
                 if (foundValidation) {
                     requiredLayers.emplace_back(Validation);
                 } else {
@@ -281,26 +362,25 @@ namespace lumina::render {
             return std::min(version, TargetVersion);
         }
 
-        [[nodiscard]] float ratePhysicalDevice(VkPhysicalDevice physicalDevice) {
-            VkPhysicalDeviceProperties properties;
-            vkGetPhysicalDeviceProperties(physicalDevice, &properties);
+        [[nodiscard]] float ratePhysicalDevice(PhysicalDevice physicalDevice) {
+            PhysicalDeviceProperties properties = physicalDevice.properties();
 
             float rating = 1.0f;
 
             switch (properties.deviceType) {
-                case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU: {
+                case PhysicalDeviceType::Dedicated: {
                     rating *= 1000.0f;
                     break;
                 }
-                case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU: {
+                case PhysicalDeviceType::Integrated: {
                     rating *= 100.0f;
                     break;
                 }
-                case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU: {
+                case PhysicalDeviceType::Virtual: {
                     rating *= 50.0f;
                     break;
                 }
-                case VK_PHYSICAL_DEVICE_TYPE_CPU: {
+                case PhysicalDeviceType::Software: {
                     rating *= 10.0f;
                     break;
                 }
@@ -311,10 +391,9 @@ namespace lumina::render {
 
             const auto& limits = properties.limits;
 
-            rating += static_cast<float>(limits.maxImageDimension2D) / 1000.0f;
-            rating += static_cast<float>(limits.maxPushConstantsSize) / 16.0f;
-            rating += static_cast<float>(limits.maxComputeWorkGroupInvocations) / 256.0f;
-            rating += static_cast<float>(limits.framebufferColorSampleCounts) * 0.5f;
+            rating += static_cast<float>(limits.maximumImageDimension2D) / 1000.0f;
+            rating += static_cast<float>(limits.maximumPushConstantsSize) / 16.0f;
+            rating += static_cast<float>(limits.maximumComputeWorkGroupInvocations) / 256.0f;
 
             return rating;
         }
@@ -331,14 +410,20 @@ namespace lumina::render {
                 std::exit(1);
             }
 
-            physicalDevices_.resize(physicalDeviceCount, nullptr);
-            deviceReferences_.resize(physicalDeviceCount, 0);
+            std::vector<VkPhysicalDevice> physicalDevices;
 
-            result = vkEnumeratePhysicalDevices(instance_, &physicalDeviceCount, physicalDevices_.data());
+            physicalDevices.resize(physicalDeviceCount, nullptr);
+            physicalDevices_.reserve(physicalDevices.size());
+
+            result = vkEnumeratePhysicalDevices(instance_, &physicalDeviceCount, physicalDevices.data());
 
             if (result != VK_SUCCESS) {
                 std::printf("error: failed to query physical devices\n");
                 std::exit(1);
+            }
+
+            for (auto& device : physicalDevices) {
+                physicalDevices_.emplace_back(device);
             }
 
             // sort physical devices based on their capabilities
