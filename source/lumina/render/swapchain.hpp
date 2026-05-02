@@ -1,8 +1,8 @@
 #pragma once
 
-#include <lumina/render/device.hpp>
-#include <lumina/render/surface.hpp>
-#include <ranges>
+#include "device.hpp"
+#include "image.hpp"
+#include "surface.hpp"
 
 namespace lumina::render {
     enum class SwapchainPresentMode {
@@ -72,6 +72,29 @@ namespace lumina::render {
                 std::printf("error: failed to create swapchain\n");
                 std::exit(1);
             }
+
+            std::uint32_t swapchainImageCount = 0;
+
+            result = vkGetSwapchainImagesKHR(device_->handle(), swapchain_, &swapchainImageCount, nullptr);
+
+            if (result != VK_SUCCESS) {
+                std::printf("error: failed to retrieve swapchain images\n");
+                std::exit(1);
+            }
+
+            std::vector<VkImage> images(swapchainImageCount);
+            images_.reserve(swapchainImageCount);
+
+            result = vkGetSwapchainImagesKHR(device_->handle(), swapchain_, &swapchainImageCount, images.data());
+
+            if (result != VK_SUCCESS) {
+                std::printf("error: failed to retrieve swapchain images\n");
+                std::exit(1);
+            }
+
+            for (auto& image : images) {
+                images_.emplace_back(image);
+            }
         }
 
         ~Swapchain() {
@@ -81,11 +104,21 @@ namespace lumina::render {
             }
         }
 
+        [[nodiscard]] std::span<Image> images() {
+            return images_;
+        }
+
+        [[nodiscard]] std::span<const Image> images() const {
+            return images_;
+        }
+
     private:
         VkSwapchainKHR swapchain_ = nullptr;
 
         Device* device_;
         Surface* surface_;
+
+        std::vector<Image> images_;
 
         [[nodiscard]] static VkCompositeAlphaFlagBitsKHR selectCompositeAlpha(VkCompositeAlphaFlagsKHR supported) {
             static constexpr VkCompositeAlphaFlagBitsKHR candidates[] = {
