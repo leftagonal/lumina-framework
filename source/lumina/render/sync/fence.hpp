@@ -1,0 +1,93 @@
+#pragma once
+
+#include "../meta/resource.hpp"
+#include "../systems/device.hpp"
+
+namespace lumina::render {
+    /**
+     * @brief Represents a CPU<->GPU synchronisation object.
+     *
+     */
+    class Fence : public Resource<VkFence> {
+    public:
+        Fence() = default;
+
+        /**
+         * @brief Construct a new fence.
+         *
+         * @param device The device that the fence will operate with.
+         */
+        Fence(Device& device)
+            : device_(&device) {
+            VkFenceCreateInfo createInfo = {
+                .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+                .pNext = nullptr,
+                .flags = 0,
+            };
+
+            VkResult result = vkCreateFence(*device_, &createInfo, nullptr, &resource());
+
+            if (result != VK_SUCCESS) {
+                std::printf("error: failed to create fence\n");
+                std::exit(1);
+            }
+        }
+
+        /**
+         * @brief Destroy the fence.
+         *
+         */
+        ~Fence() {
+            destroy();
+        }
+
+        Fence(Fence&&) noexcept = default;
+
+        Fence& operator=(Fence&&) noexcept = default;
+
+        /**
+         * @brief Construct a new fence.
+         *
+         * @param device The device that the fence will operate with.
+         */
+        void create(Device& device) {
+            if (*this) {
+                return;
+            }
+
+            device_ = &device;
+
+            VkFenceCreateInfo createInfo = {
+                .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+                .pNext = nullptr,
+                .flags = 0,
+            };
+
+            VkResult result = vkCreateFence(*device_, &createInfo, nullptr, &resource());
+
+            if (result != VK_SUCCESS) {
+                std::printf("error: failed to create fence\n");
+                std::exit(1);
+            }
+        }
+
+        /**
+         * @brief Destroy the fence.
+         *
+         */
+        void destroy() {
+            if (!*this) {
+                return;
+            }
+
+            vkDestroyFence(*device_, resource(), nullptr);
+
+            device_ = nullptr;
+
+            invalidate();
+        }
+
+    private:
+        Device* device_ = nullptr;
+    };
+}

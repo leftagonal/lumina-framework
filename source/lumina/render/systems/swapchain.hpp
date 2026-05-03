@@ -1,23 +1,45 @@
 #pragma once
 
+#include "../meta/resource.hpp"
+#include "../resources/image.hpp"
 #include "device.hpp"
-#include "image.hpp"
 #include "surface.hpp"
 
 namespace lumina::render {
+    /**
+     * @brief The way that a swapchain will write to and swap framebuffers.
+     *
+     */
     enum class SwapchainPresentMode {
+        /// @brief The swapchain will always wait for the next v-blank.
         Synchronous,
+
+        /// @brief The swapchain waits for v-blank, but can submit late images if required.
         RelaxedSynchronous,
+
+        /// @brief The swapchain overwrites the oldest image and presents the most recent at v-blank.
         Asynchronous,
+
+        /// @brief The swapchain immediately presents the last processed image.
         Immediate,
     };
 
+    /**
+     * @brief Configuration for a swapchain.
+     *
+     */
     struct SwapchainConfig {
         SwapchainPresentMode presentMode;
         std::uint32_t minimumImageCount;
     };
 
-    class Swapchain {
+    /**
+     * @brief A system capable of displaying images directly to a surface.
+     *
+     * Note that this may not be available one very physical device. you must successfully create
+     * a logical device that has the 'swapchains' feature enabled.
+     */
+    class Swapchain : public Resource<VkSwapchainKHR> {
         struct SurfaceCapabilities {
             std::uint32_t minimumImageCount;
             VkExtent2D extent;
@@ -26,6 +48,17 @@ namespace lumina::render {
         };
 
     public:
+        Swapchain() = default;
+
+        /**
+         * @brief Construct a new swapchain.
+         *
+         * @param device The swapchain-enabled device to operate with.
+         * @param surface The surface to output to.
+         * @param graphicsQueue The queue that will render to this swapchain's images.
+         * @param presentQueue The queue that will present the images of the swapchain to the surface.
+         * @param config The swapchain configuration to use.
+         */
         Swapchain(Device& device, Surface& surface, Queue& graphicsQueue, Queue& presentQueue, const SwapchainConfig& config)
             : device_(&device), surface_(&surface) {
             SurfaceCapabilities capabilities = getSurfaceCapabilities(config);
@@ -35,7 +68,7 @@ namespace lumina::render {
                 .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
                 .pNext = nullptr,
                 .flags = 0,
-                .surface = surface_->handle(),
+                .surface = *surface_,
                 .minImageCount = capabilities.minimumImageCount,
                 .imageFormat = surfaceFormat.format,
                 .imageColorSpace = surfaceFormat.colorSpace,
@@ -66,7 +99,7 @@ namespace lumina::render {
                 createInfo.pQueueFamilyIndices = familyIndices.data();
             }
 
-            VkResult result = vkCreateSwapchainKHR(device_->handle(), &createInfo, nullptr, &swapchain_);
+            VkResult result = vkCreateSwapchainKHR(*device_, &createInfo, nullptr, &resource());
 
             if (result != VK_SUCCESS) {
                 std::printf("error: failed to create swapchain\n");
@@ -75,7 +108,7 @@ namespace lumina::render {
 
             std::uint32_t swapchainImageCount = 0;
 
-            result = vkGetSwapchainImagesKHR(device_->handle(), swapchain_, &swapchainImageCount, nullptr);
+            result = vkGetSwapchainImagesKHR(*device_, resource(), &swapchainImageCount, nullptr);
 
             if (result != VK_SUCCESS) {
                 std::printf("error: failed to retrieve swapchain images\n");
@@ -85,7 +118,7 @@ namespace lumina::render {
             std::vector<VkImage> images(swapchainImageCount);
             images_.reserve(swapchainImageCount);
 
-            result = vkGetSwapchainImagesKHR(device_->handle(), swapchain_, &swapchainImageCount, images.data());
+            result = vkGetSwapchainImagesKHR(*device_, resource(), &swapchainImageCount, images.data());
 
             if (result != VK_SUCCESS) {
                 std::printf("error: failed to retrieve swapchain images\n");
@@ -93,31 +126,145 @@ namespace lumina::render {
             }
 
             for (auto& image : images) {
-                images_.emplace_back(image);
+                images_.emplace_back(image, ImageProvider::Swapchain);
             }
         }
 
+        /**
+         * @brief Destroy the swapchain.
+         *
+         */
         ~Swapchain() {
-            if (swapchain_) {
-                vkDestroySwapchainKHR(device_->handle(), swapchain_, nullptr);
-                swapchain_ = nullptr;
+            destroy();
+        }
+
+        Swapchain(Swapchain&&) noexcept = default;
+
+        Swapchain& operator=(Swapchain&&) noexcept = default;
+
+        /**
+         * @brief Construct a new swapchain.
+         *
+         * @param device The swapchain-enabled device to operate with.
+         * @param surface The surface to output to.
+         * @param graphicsQueue The queue that will render to this swapchain's images.
+         * @param presentQueue The queue that will present the images of the swapchain to the surface.
+         * @param config The swapchain configuration to use.
+         */
+        void create(Device& device, Surface& surface, Queue& graphicsQueue, Queue& presentQueue, const SwapchainConfig& config) {
+            if (*this) {
+                return;
+            }
+
+            device_ = &device;
+            surface_ = &surface;
+
+            SurfaceCapabilities capabilities = getSurfaceCapabilities(config);
+            VkSurfaceFormatKHR surfaceFormat = selectSurfaceFormat();
+
+            VkSwapchainCreateInfoKHR createInfo = {
+                .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+                .pNext = nullptr,
+                .flags = 0,
+                .surface = *surface_,
+                .minImageCount = capabilities.minimumImageCount,
+                .imageFormat = surfaceFormat.format,
+                .imageColorSpace = surfaceFormat.colorSpace,
+                .imageExtent = capabilities.extent,
+                .imageArrayLayers = 1,
+                .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+                .imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
+                .pQueueFamilyIndices = nullptr,
+                .preTransform = capabilities.transform,
+                .compositeAlpha = capabilities.compositeAlpha,
+                .presentMode = selectPresentMode(config),
+                .clipped = VK_TRUE,
+                .oldSwapchain = nullptr,
+            };
+
+            QueueAssignment graphicsAssignment = graphicsQueue.assignment();
+            QueueAssignment presentAssignment = presentQueue.assignment();
+
+            bool needsExclusive = graphicsAssignment.familyIndex != presentAssignment.familyIndex;
+
+            std::array<std::uint32_t, 2> familyIndices = {
+                graphicsAssignment.familyIndex,
+                presentAssignment.familyIndex,
+            };
+
+            if (needsExclusive) {
+                createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
+                createInfo.pQueueFamilyIndices = familyIndices.data();
+            }
+
+            VkResult result = vkCreateSwapchainKHR(*device_, &createInfo, nullptr, &resource());
+
+            if (result != VK_SUCCESS) {
+                std::printf("error: failed to create swapchain\n");
+                std::exit(1);
+            }
+
+            std::uint32_t swapchainImageCount = 0;
+
+            result = vkGetSwapchainImagesKHR(*device_, resource(), &swapchainImageCount, nullptr);
+
+            if (result != VK_SUCCESS) {
+                std::printf("error: failed to retrieve swapchain images\n");
+                std::exit(1);
+            }
+
+            std::vector<VkImage> images(swapchainImageCount);
+            images_.reserve(swapchainImageCount);
+
+            result = vkGetSwapchainImagesKHR(*device_, resource(), &swapchainImageCount, images.data());
+
+            if (result != VK_SUCCESS) {
+                std::printf("error: failed to retrieve swapchain images\n");
+                std::exit(1);
+            }
+
+            for (auto& image : images) {
+                images_.emplace_back(image, ImageProvider::Swapchain);
             }
         }
 
+        /**
+         * @brief Destroy the swapchain.
+         *
+         */
+        void destroy() {
+            if (!*this) {
+                return;
+            }
+            vkDestroySwapchainKHR(*device_, resource(), nullptr);
+
+            surface_ = nullptr;
+            device_ = nullptr;
+
+            invalidate();
+        }
+
+        /**
+         * @brief Access the swapchain's images.
+         *
+         * @return std::span<Image>
+         */
         [[nodiscard]] std::span<Image> images() {
             return images_;
         }
 
+        /**
+         * @brief Access the swapchain's images.
+         *
+         * @return std::span<const Image>
+         */
         [[nodiscard]] std::span<const Image> images() const {
             return images_;
         }
 
     private:
-        VkSwapchainKHR swapchain_ = nullptr;
-
-        Device* device_;
-        Surface* surface_;
-
+        Device* device_ = nullptr;
+        Surface* surface_ = nullptr;
         std::vector<Image> images_;
 
         [[nodiscard]] static VkCompositeAlphaFlagBitsKHR selectCompositeAlpha(VkCompositeAlphaFlagsKHR supported) {
@@ -138,8 +285,8 @@ namespace lumina::render {
         }
 
         [[nodiscard]] SurfaceCapabilities getSurfaceCapabilities(const SwapchainConfig& config) {
-            VkPhysicalDevice physicalDevice = device_->physicalDevice().handle();
-            VkSurfaceKHR surface = surface_->handle();
+            VkPhysicalDevice physicalDevice = device_->physicalDevice();
+            VkSurfaceKHR surface = *surface_;
 
             VkSurfaceCapabilitiesKHR surfaceCapabilities;
 
@@ -154,8 +301,8 @@ namespace lumina::render {
         }
 
         [[nodiscard]] VkPresentModeKHR selectPresentMode(const SwapchainConfig& config) {
-            VkPhysicalDevice physicalDevice = device_->physicalDevice().handle();
-            VkSurfaceKHR surface = surface_->handle();
+            VkPhysicalDevice physicalDevice = device_->physicalDevice();
+            VkSurfaceKHR surface = *surface_;
 
             std::uint32_t presentModeCount = 0;
 
@@ -194,8 +341,8 @@ namespace lumina::render {
         }
 
         [[nodiscard]] VkSurfaceFormatKHR selectSurfaceFormat() {
-            VkPhysicalDevice physicalDevice = device_->physicalDevice().handle();
-            VkSurfaceKHR surface = surface_->handle();
+            VkPhysicalDevice physicalDevice = device_->physicalDevice();
+            VkSurfaceKHR surface = *surface_;
 
             std::uint32_t surfaceFormatCount = 0;
 

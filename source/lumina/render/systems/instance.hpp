@@ -1,30 +1,73 @@
 #pragma once
 
+#include "../resources/physical_device.hpp"
+#include "application.hpp"
+
 #include <cstdint>
 #include <cstdio>
-#include <lumina/core/application.hpp>
-#include <lumina/render/physical_device.hpp>
-#include <string_view>
-#include <vector>
-#include <vulkan/vulkan.h>
 
 namespace lumina::render {
+    /**
+     * @brief The features an instance is expected to support.
+     *
+     */
     struct InstanceFeatures {
-        bool platformIntegration;
+        /// @brief Whether window surfaces should be supported.
+        bool surfaces;
+
+        /// @brief Whether API-provided validation systems should be enabled.
         bool validation;
+
+        /// @brief Whether Abstraction-provided debugging should be enabled.
         bool debugging;
     };
 
+    /**
+     * @brief Which physical device to request.
+     *
+     */
     enum class PhysicalDeviceRequest {
+        /// @brief The most capable physical device.
         MostCapable,
+
+        /// @brief The least capable physical device.
         LeastCapable,
+
+        /**
+         * @brief The best physical device that has the fewest acquisitions.
+         *
+         * A physical device is considered 'acquired' if it is in use by a logical device.
+         * Acquisitions are counted per-physical-device, and the best physical device with
+         * the fewest acquisitions is used.
+         */
         NextBestAvailable,
+
+        /**
+         * @brief The worst physical device that has the fewest acquisitions.
+         *
+         * A physical device is considered 'acquired' if it is in use by a logical device.
+         * Acquisitions are counted per-physical-device, and the worst physical device with
+         * the fewest acquisitions is used.
+         */
         NextWorstAvailable,
     };
 
-    class Instance {
+    /**
+     * @brief The basic initialiser for the rendering API.
+     *
+     */
+    class Instance : public Resource<VkInstance> {
     public:
-        Instance(const Application& application, const InstanceFeatures& features) {
+        Instance() = default;
+
+        /**
+         * @brief Construct a new instance.
+         *
+         * @param application The application to construct the instance for.
+         * @param features The features for the instance to support.
+         */
+        Instance(Application& application, const InstanceFeatures& features)
+            : application_(&application) {
             Extensions availableExtensions = getSupportedExtensions();
             Names platformExtensions = getPlatformExtensions();
             Names requiredExtensions = getRequiredExtensions(features, platformExtensions);
@@ -70,24 +113,120 @@ namespace lumina::render {
                 .ppEnabledExtensionNames = requiredExtensions.data(),
             };
 
-            VkResult result = vkCreateInstance(&createInfo, nullptr, &instance_);
+            VkResult result = vkCreateInstance(&createInfo, nullptr, &resource());
 
             if (result != VK_SUCCESS) {
                 std::printf("error: failed to create instance\n");
                 std::exit(1);
             }
 
-            queryPhysicalDevices();
+            occupyPhysicalDevices();
         }
 
+        /**
+         * @brief Destroy the instance.
+         *
+         */
         ~Instance() {
-            if (instance_) {
-                vkDestroyInstance(instance_, nullptr);
-                instance_ = nullptr;
-            }
+            destroy();
         }
 
-        [[nodiscard]] PhysicalDevice& acquirePhysicalDevice(PhysicalDeviceRequest request) {
+        Instance(Instance&&) noexcept = default;
+
+        Instance& operator=(Instance&&) noexcept = default;
+
+        /**
+         * @brief Construct a new instance.
+         *
+         * @param application The application to construct the instance for.
+         * @param features The features for the instance to support.
+         */
+        void create(Application& application, const InstanceFeatures& features) {
+            if (*this) {
+                return;
+            }
+
+            application_ = &application;
+
+            Extensions availableExtensions = getSupportedExtensions();
+            Names platformExtensions = getPlatformExtensions();
+            Names requiredExtensions = getRequiredExtensions(features, platformExtensions);
+
+            if (!supportsRequestedExtensions(availableExtensions, requiredExtensions)) {
+                std::printf("error: not all required instance extensions are supported\n");
+                std::exit(1);
+            }
+
+            Layers availableLayers = getSupportedLayers();
+            Names requiredLayers = getRequiredLayers(features, availableLayers);
+
+            std::uint32_t applicationVersion = VK_MAKE_VERSION(
+                application.version().major,
+                application.version().minor,
+                application.version().patch);
+
+            std::uint32_t apiVersion = getApiVersion();
+
+            std::uint32_t engineVersion = VK_MAKE_VERSION(
+                0,
+                1,
+                0);
+
+            VkApplicationInfo applicationInfo = {
+                .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
+                .pNext = nullptr,
+                .pApplicationName = application.name().data(),
+                .applicationVersion = applicationVersion,
+                .pEngineName = nullptr,
+                .engineVersion = engineVersion,
+                .apiVersion = apiVersion,
+            };
+
+            VkInstanceCreateInfo createInfo = {
+                .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
+                .pNext = nullptr,
+                .flags = portability_ ? VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR : 0u,
+                .pApplicationInfo = &applicationInfo,
+                .enabledLayerCount = static_cast<std::uint32_t>(requiredLayers.size()),
+                .ppEnabledLayerNames = requiredLayers.data(),
+                .enabledExtensionCount = static_cast<std::uint32_t>(requiredExtensions.size()),
+                .ppEnabledExtensionNames = requiredExtensions.data(),
+            };
+
+            VkResult result = vkCreateInstance(&createInfo, nullptr, &resource());
+
+            if (result != VK_SUCCESS) {
+                std::printf("error: failed to create instance\n");
+                std::exit(1);
+            }
+
+            occupyPhysicalDevices();
+        }
+
+        /**
+         * @brief Destroy the instance.
+         *
+         */
+        void destroy() {
+            if (!*this) {
+                return;
+            }
+
+            vkDestroyInstance(resource(), nullptr);
+
+            application_ = nullptr;
+            physicalDevices_.clear();
+
+            invalidate();
+        }
+
+        /**
+         * @brief Acquire the physical device that best matches your request.
+         *
+         * @param request The filter for the physical device.
+         * @return PhysicalDevice& The located physical device.
+         */
+        [[nodiscard]] PhysicalDevice& acquireDesiredPhysicalDevice(PhysicalDeviceRequest request) {
             if (physicalDevices_.empty()) {
                 std::printf("error: no physical devices detected\n");
                 std::exit(1);
@@ -147,7 +286,13 @@ namespace lumina::render {
             return physicalDevices_[index];
         }
 
-        [[nodiscard]] const PhysicalDevice& acquirePhysicalDevice(PhysicalDeviceRequest request) const {
+        /**
+         * @brief Acquire the physical device that best matches your request.
+         *
+         * @param request The filter for the physical device.
+         * @return const PhysicalDevice& The located physical device.
+         */
+        [[nodiscard]] const PhysicalDevice& acquireDesiredPhysicalDevice(PhysicalDeviceRequest request) const {
             if (physicalDevices_.empty()) {
                 std::printf("error: no physical devices detected\n");
                 std::exit(1);
@@ -205,19 +350,33 @@ namespace lumina::render {
             return physicalDevices_[index];
         }
 
-        [[nodiscard]] VkInstance handle() const {
-            return instance_;
+        /**
+         * @brief Provide all located physical devices.
+         *
+         * @return std::span<PhysicalDevice> The physical devices.
+         */
+        [[nodiscard]] std::span<PhysicalDevice> physicalDevices() noexcept {
+            return physicalDevices_;
+        }
+
+        /**
+         * @brief Provide all located physical devices.
+         *
+         * @return std::span<const PhysicalDevice> The physical devices.
+         */
+        [[nodiscard]] std::span<const PhysicalDevice> physicalDevices() const noexcept {
+            return physicalDevices_;
         }
 
     private:
         using Names = std::vector<const char*>;
         using Extensions = std::vector<VkExtensionProperties>;
         using Layers = std::vector<VkLayerProperties>;
-
         using PhysicalDevices = std::vector<PhysicalDevice>;
 
+        Application* application_ = nullptr;
+
         PhysicalDevices physicalDevices_;
-        VkInstance instance_ = nullptr;
         bool portability_ = false;
 
         [[nodiscard]] Extensions getSupportedExtensions() {
@@ -237,6 +396,14 @@ namespace lumina::render {
             if (result != VK_SUCCESS) {
                 std::printf("error: failed to enumerate supported instance extensions\n");
                 std::exit(1);
+            }
+
+            constexpr const char* PortabilityEnumeration = "VK_KHR_portability_enumeration";
+
+            for (auto extension : extensions) {
+                bool isPortabilityEnumeration = std::string_view(extension.extensionName) == PortabilityEnumeration;
+
+                portability_ = portability_ || isPortabilityEnumeration;
             }
 
             return extensions;
@@ -291,8 +458,8 @@ namespace lumina::render {
                 portability_ = portability_ || isPortabilityEnumeration;
 
                 // any required extensions should be included if requested
-                // this excludes portability extensions since they are always neededa
-                if (features.platformIntegration && !isPortabilityEnumeration) {
+                // this excludes portability extensions since they are always needed
+                if (features.surfaces && !isPortabilityEnumeration) {
                     requiredExtensions.emplace_back(extension);
                 }
             }
@@ -362,7 +529,7 @@ namespace lumina::render {
             return std::min(version, TargetVersion);
         }
 
-        [[nodiscard]] float ratePhysicalDevice(PhysicalDevice physicalDevice) {
+        [[nodiscard]] float ratePhysicalDevice(const PhysicalDevice& physicalDevice) {
             PhysicalDeviceProperties properties = physicalDevice.properties();
 
             float rating = 1.0f;
@@ -398,12 +565,12 @@ namespace lumina::render {
             return rating;
         }
 
-        void queryPhysicalDevices() {
+        void occupyPhysicalDevices() {
             physicalDevices_.clear();
 
             std::uint32_t physicalDeviceCount = 0;
 
-            VkResult result = vkEnumeratePhysicalDevices(instance_, &physicalDeviceCount, nullptr);
+            VkResult result = vkEnumeratePhysicalDevices(resource(), &physicalDeviceCount, nullptr);
 
             if (result != VK_SUCCESS) {
                 std::printf("error: failed to query physical devices\n");
@@ -415,7 +582,7 @@ namespace lumina::render {
             physicalDevices.resize(physicalDeviceCount, nullptr);
             physicalDevices_.reserve(physicalDevices.size());
 
-            result = vkEnumeratePhysicalDevices(instance_, &physicalDeviceCount, physicalDevices.data());
+            result = vkEnumeratePhysicalDevices(resource(), &physicalDeviceCount, physicalDevices.data());
 
             if (result != VK_SUCCESS) {
                 std::printf("error: failed to query physical devices\n");

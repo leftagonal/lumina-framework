@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../meta/resource.hpp"
 #include "queue.hpp"
 
 #include <cstdint>
@@ -8,14 +9,31 @@
 #include <vector>
 
 namespace lumina::render {
+    /**
+     * @brief The type of physical device.
+     *
+     */
     enum class PhysicalDeviceType {
+        /// @brief Some other unrecognised type.
         Other,
+
+        /// @brief Integrated graphics. (On-CPU)
         Integrated,
+
+        /// @brief A dedicated graphics device.
         Dedicated,
+
+        /// @brief A virtual display adapter. (Virtual machines)
         Virtual,
+
+        /// @brief A CPU-driven display adapter.
         Software,
     };
 
+    /**
+     * @brief Limits imposed by the physical device.
+     *
+     */
     struct PhysicalDeviceLimits {
         std::uint32_t maximumImageDimension1D;
         std::uint32_t maximumImageDimension2D;
@@ -32,6 +50,10 @@ namespace lumina::render {
         float maximumSamplerLODBias;
     };
 
+    /**
+     * @brief Information about the physical device.
+     *
+     */
     struct PhysicalDeviceProperties {
         std::string_view name;
         std::uint32_t vendorID;
@@ -42,20 +64,31 @@ namespace lumina::render {
         PhysicalDeviceLimits limits;
     };
 
-    class PhysicalDevice {
+    /**
+     * @brief A representation of a GPU.
+     *
+     */
+    class PhysicalDevice : public Resource<VkPhysicalDevice> {
     public:
+        /**
+         * @brief Construct a new physical device.
+         *
+         * @param physicalDevice The handle for the physical device.
+         *
+         * Physical devices do not own their handle, the instance does.
+         */
         PhysicalDevice(VkPhysicalDevice physicalDevice)
-            : physicalDevice_(physicalDevice) {
-            vkGetPhysicalDeviceProperties(physicalDevice_, &properties_);
+            : Resource(physicalDevice) {
+            vkGetPhysicalDeviceProperties(resource(), &properties_);
 
             std::uint32_t familyCount = 0;
 
-            vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice_, &familyCount, nullptr);
+            vkGetPhysicalDeviceQueueFamilyProperties(resource(), &familyCount, nullptr);
 
             std::vector<VkQueueFamilyProperties> families(familyCount);
             queueFamilies_.reserve(familyCount);
 
-            vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice_, &familyCount, families.data());
+            vkGetPhysicalDeviceQueueFamilyProperties(resource(), &familyCount, families.data());
 
             for (std::uint32_t i = 0; i < familyCount; ++i) {
                 queueFamilies_.emplace_back(QueueFamily{
@@ -72,17 +105,32 @@ namespace lumina::render {
             }
         }
 
+        /**
+         * @brief Release the physical device.
+         *
+         */
         ~PhysicalDevice() {
-            physicalDevice_ = nullptr;
+            if (!*this) {
+                return;
+            }
+
+            release();
+
+            properties_ = {};
+
+            queueFamilies_.clear();
         }
 
-        PhysicalDevice(const PhysicalDevice&) = default;
-        PhysicalDevice(PhysicalDevice&&) = default;
+        PhysicalDevice(PhysicalDevice&&) noexcept = default;
 
-        PhysicalDevice& operator=(const PhysicalDevice&) = default;
-        PhysicalDevice& operator=(PhysicalDevice&&) = default;
+        PhysicalDevice& operator=(PhysicalDevice&&) noexcept = default;
 
-        [[nodiscard]] PhysicalDeviceProperties properties() const {
+        /**
+         * @brief Get the properties of this physical device.
+         *
+         * @return PhysicalDeviceProperties The properties of this physical device.
+         */
+        [[nodiscard]] PhysicalDeviceProperties properties() const noexcept {
             const auto& limits = properties_.limits;
 
             return PhysicalDeviceProperties{
@@ -109,14 +157,20 @@ namespace lumina::render {
             };
         }
 
-        [[nodiscard]] VkPhysicalDevice handle() const {
-            return physicalDevice_;
-        }
-
+        /**
+         * @brief Mark the physical device as in-use.
+         *
+         * This only exists for the logical device.
+         */
         void acquire() {
             ++acquisitions_;
         }
 
+        /**
+         * @brief Releases a previous acquisition of the device.
+         *
+         * This only exists for the logical device.
+         */
         void release() {
             if (acquisitions_ == 0) {
                 return;
@@ -125,20 +179,26 @@ namespace lumina::render {
             --acquisitions_;
         }
 
+        /**
+         * @brief Provides how many systems are using or have acquired this physical device.
+         *
+         */
         [[nodiscard]] std::size_t acquisitions() const {
             return acquisitions_;
         }
 
+        /**
+         * @brief Provides the queue families exposed by this device.
+         *
+         * @return std::span<const QueueFamily> The list of queue families.
+         */
         [[nodiscard]] std::span<const QueueFamily> queueFamilies() const {
             return queueFamilies_;
         }
 
     private:
-        VkPhysicalDevice physicalDevice_;
         VkPhysicalDeviceProperties properties_ = {};
-
         std::vector<QueueFamily> queueFamilies_;
-
         std::size_t acquisitions_ = 0;
 
         [[nodiscard]] static PhysicalDeviceType mapDeviceType(VkPhysicalDeviceType type) {
