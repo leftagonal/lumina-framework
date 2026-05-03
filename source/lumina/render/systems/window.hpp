@@ -57,7 +57,7 @@ namespace lumina::render {
             }
 
             glfwSetWindowUserPointer(resource(), this);
-            glfwSetWindowSizeCallback(resource(), onWindowResize);
+            glfwSetFramebufferSizeCallback(resource(), onWindowResize);
             glfwSetWindowCloseCallback(resource(), onWindowClose);
         }
 

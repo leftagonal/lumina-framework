@@ -76,6 +76,7 @@ namespace lumina::render {
                 .imageArrayLayers = 1,
                 .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
                 .imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
+                .queueFamilyIndexCount = 0,
                 .pQueueFamilyIndices = nullptr,
                 .preTransform = capabilities.transform,
                 .compositeAlpha = capabilities.compositeAlpha,
@@ -96,6 +97,7 @@ namespace lumina::render {
 
             if (needsExclusive) {
                 createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
+                createInfo.queueFamilyIndexCount = 2,
                 createInfo.pQueueFamilyIndices = familyIndices.data();
             }
 
@@ -174,6 +176,7 @@ namespace lumina::render {
                 .imageArrayLayers = 1,
                 .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
                 .imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
+                .queueFamilyIndexCount = 0,
                 .pQueueFamilyIndices = nullptr,
                 .preTransform = capabilities.transform,
                 .compositeAlpha = capabilities.compositeAlpha,
@@ -194,6 +197,7 @@ namespace lumina::render {
 
             if (needsExclusive) {
                 createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
+                createInfo.queueFamilyIndexCount = 2,
                 createInfo.pQueueFamilyIndices = familyIndices.data();
             }
 
@@ -292,9 +296,16 @@ namespace lumina::render {
 
             vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, &surfaceCapabilities);
 
+            VkExtent2D extent = surfaceCapabilities.currentExtent;
+
+            if (extent.width == UINT32_MAX || extent.height == UINT32_MAX) {
+                extent.width = surface_->extent().width;
+                extent.height = surface_->extent().height;
+            }
+
             return {
                 .minimumImageCount = std::clamp(config.minimumImageCount, surfaceCapabilities.minImageCount, surfaceCapabilities.maxImageCount),
-                .extent = surfaceCapabilities.currentExtent,
+                .extent = extent,
                 .transform = surfaceCapabilities.currentTransform,
                 .compositeAlpha = selectCompositeAlpha(surfaceCapabilities.supportedCompositeAlpha),
             };

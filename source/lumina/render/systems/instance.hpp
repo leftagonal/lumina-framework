@@ -5,6 +5,7 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <algorithm>
 
 namespace lumina::render {
     /**

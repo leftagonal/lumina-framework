@@ -82,6 +82,15 @@ namespace lumina::render {
             invalidate();
         }
 
+        /**
+         * @brief Provides the surface's current extent.
+         * 
+         * @return Extent2D The extent of the surface.
+         */
+        [[nodiscard]] Extent2D extent() const {
+            return window_->extent();
+        }
+
         [[nodiscard]] std::vector<QueueFamily> supportedFamilies(PhysicalDevice& physicalDevice) {
             auto families = physicalDevice.queueFamilies();
             std::vector<QueueFamily> supportedFamilies;
