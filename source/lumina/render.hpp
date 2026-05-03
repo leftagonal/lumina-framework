@@ -13,3 +13,4 @@
 
 #include "render/sync/fence.hpp"
 #include "render/sync/semaphore.hpp"
+#include "render/sync/timeline_semaphore.hpp"

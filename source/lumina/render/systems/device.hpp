@@ -307,9 +307,25 @@ namespace lumina::render {
         }
 
         void createDevice(const Names& selectedExtensions, const QueueCreateInfos& queueCreateInfos) {
+            VkPhysicalDeviceVulkan11Features vulkan11Features = {};
+            VkPhysicalDeviceVulkan12Features vulkan12Features = {};
+            VkPhysicalDeviceVulkan13Features vulkan13Features = {};
+
+            vulkan11Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
+            vulkan11Features.pNext = &vulkan12Features;
+
+            vulkan12Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+            vulkan12Features.pNext = &vulkan13Features;
+            vulkan12Features.timelineSemaphore = true;
+
+            vulkan13Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+            vulkan13Features.pNext = nullptr;
+            vulkan13Features.synchronization2 = true;
+            vulkan13Features.dynamicRendering = true;
+
             VkDeviceCreateInfo createInfo = {
                 .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-                .pNext = nullptr,
+                .pNext = &vulkan11Features,
                 .flags = 0,
                 .queueCreateInfoCount = static_cast<std::uint32_t>(queueCreateInfos.createInfos.size()),
                 .pQueueCreateInfos = queueCreateInfos.createInfos.data(),

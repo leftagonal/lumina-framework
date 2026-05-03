@@ -5,7 +5,7 @@
 
 namespace lumina::render {
     /**
-     * @brief Represents a CPU<->GPU synchronisation object.
+     * @brief Represents a CPU<-GPU synchronisation object.
      *
      */
     class Fence : public Resource<VkFence> {
@@ -16,13 +16,14 @@ namespace lumina::render {
          * @brief Construct a new fence.
          *
          * @param device The device that the fence will operate with.
+         * @param startSignalled Whether the fence should start as signalled.
          */
-        Fence(Device& device)
+        Fence(Device& device, bool startSignalled = false)
             : device_(&device) {
             VkFenceCreateInfo createInfo = {
-                .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+                .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
                 .pNext = nullptr,
-                .flags = 0,
+                .flags = startSignalled ? VK_FENCE_CREATE_SIGNALED_BIT : 0u,
             };
 
             VkResult result = vkCreateFence(*device_, &createInfo, nullptr, &resource());
@@ -49,8 +50,9 @@ namespace lumina::render {
          * @brief Construct a new fence.
          *
          * @param device The device that the fence will operate with.
+         * @param startSignalled Whether the fence should start as signalled.
          */
-        void create(Device& device) {
+        void create(Device& device, bool startSignalled = false) {
             if (*this) {
                 return;
             }
@@ -58,9 +60,9 @@ namespace lumina::render {
             device_ = &device;
 
             VkFenceCreateInfo createInfo = {
-                .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+                .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
                 .pNext = nullptr,
-                .flags = 0,
+                .flags = startSignalled ? VK_FENCE_CREATE_SIGNALED_BIT : 0u,
             };
 
             VkResult result = vkCreateFence(*device_, &createInfo, nullptr, &resource());
@@ -85,6 +87,23 @@ namespace lumina::render {
             device_ = nullptr;
 
             invalidate();
+        }
+
+        [[nodiscard]] bool status() const {
+            VkResult result = vkGetFenceStatus(*device_, resource());
+
+            switch (result) {
+                case VK_SUCCESS: {
+                    return true;
+                }
+                case VK_NOT_READY: {
+                    return false;
+                }
+                default: {
+                    std::printf("error: failed to query fence status\n");
+                    std::exit(1);
+                }
+            }
         }
 
     private:

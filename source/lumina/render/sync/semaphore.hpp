@@ -5,7 +5,7 @@
 
 namespace lumina::render {
     /**
-     * @brief Represents a GOU<->GPU synchronisation object.
+     * @brief Represents a binary GPU<->GPU synchronisation object.
      *
      */
     class Semaphore : public Resource<VkSemaphore> {
