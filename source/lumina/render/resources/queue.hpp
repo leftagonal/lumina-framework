@@ -44,6 +44,24 @@ namespace lumina::render {
         QueueFamilyFeatures features;
     };
 
+    /**
+     * @brief The status of the swapchain after a given operation.
+     *
+     */
+    enum class SwapchainStatus {
+        /// @brief The swapchain is in an ideal state.
+        Nominal,
+
+        /// @brief The swapchain state isn't ideal, but it will continue to work.
+        Suboptimal,
+
+        /// @brief The swapchain has become invalid, likely due to a resize or move.
+        SelfInvalid,
+
+        /// @brief The surface has become invalid and should be recreated, likely because the swapchain moved across monitors.
+        SurfaceInvalid,
+    };
+
     class Queue : public Resource<VkQueue> {
     public:
         /**

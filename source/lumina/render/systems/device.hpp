@@ -1,7 +1,6 @@
 #pragma once
 
 #include "../meta/resource.hpp"
-#include "../resources/queue.hpp"
 #include "instance.hpp"
 
 #include <span>

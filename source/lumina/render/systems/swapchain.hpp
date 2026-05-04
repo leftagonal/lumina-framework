@@ -2,6 +2,8 @@
 
 #include "../meta/resource.hpp"
 #include "../resources/image.hpp"
+#include "../sync/fence.hpp"
+#include "../sync/semaphore.hpp"
 #include "device.hpp"
 #include "surface.hpp"
 
@@ -22,6 +24,17 @@ namespace lumina::render {
 
         /// @brief The swapchain immediately presents the last processed image.
         Immediate,
+    };
+
+    /**
+     * @brief The result of swapchain::acquire().
+     *
+     */
+    struct SwapchainAcquireResult {
+        /// @brief The acquired image index. Only valid if status is one of the 'valid' states.
+        std::uint32_t imageIndex;
+
+        SwapchainStatus status;
     };
 
     /**
@@ -61,75 +74,42 @@ namespace lumina::render {
          */
         Swapchain(Device& device, Surface& surface, Queue& graphicsQueue, Queue& presentQueue, const SwapchainConfig& config)
             : device_(&device), surface_(&surface) {
-            SurfaceCapabilities capabilities = getSurfaceCapabilities(config);
-            VkSurfaceFormatKHR surfaceFormat = selectSurfaceFormat();
+            selectPresentMode(config.presentMode);
 
-            VkSwapchainCreateInfoKHR createInfo = {
-                .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
-                .pNext = nullptr,
-                .flags = 0,
-                .surface = *surface_,
-                .minImageCount = capabilities.minimumImageCount,
-                .imageFormat = surfaceFormat.format,
-                .imageColorSpace = surfaceFormat.colorSpace,
-                .imageExtent = capabilities.extent,
-                .imageArrayLayers = 1,
-                .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-                .imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
-                .queueFamilyIndexCount = 0,
-                .pQueueFamilyIndices = nullptr,
-                .preTransform = capabilities.transform,
-                .compositeAlpha = capabilities.compositeAlpha,
-                .presentMode = selectPresentMode(config),
-                .clipped = VK_TRUE,
-                .oldSwapchain = nullptr,
-            };
-
-            QueueAssignment graphicsAssignment = graphicsQueue.assignment();
-            QueueAssignment presentAssignment = presentQueue.assignment();
-
-            bool needsExclusive = graphicsAssignment.familyIndex != presentAssignment.familyIndex;
-
-            std::array<std::uint32_t, 2> familyIndices = {
-                graphicsAssignment.familyIndex,
-                presentAssignment.familyIndex,
-            };
-
-            if (needsExclusive) {
-                createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
-                createInfo.queueFamilyIndexCount = 2,
-                createInfo.pQueueFamilyIndices = familyIndices.data();
-            }
-
-            VkResult result = vkCreateSwapchainKHR(*device_, &createInfo, nullptr, &resource());
+            VkResult result = createSwapchain(graphicsQueue, presentQueue, nullptr, config.minimumImageCount);
 
             if (result != VK_SUCCESS) {
                 std::printf("error: failed to create swapchain\n");
                 std::exit(1);
             }
 
-            std::uint32_t swapchainImageCount = 0;
+            getImages();
+        }
 
-            result = vkGetSwapchainImagesKHR(*device_, resource(), &swapchainImageCount, nullptr);
+        /**
+         * @brief Construct a new swapchain.
+         *
+         * @param device The swapchain-enabled device to operate with.
+         * @param surface The surface to output to.
+         * @param graphicsQueue The queue that will render to this swapchain's images.
+         * @param presentQueue The queue that will present the images of the swapchain to the surface.
+         * @param oldSwapchain The swapchain this will replace.
+         * @param config The swapchain configuration to use.
+         */
+        Swapchain(Device& device, Surface& surface, Queue& graphicsQueue, Queue& presentQueue, Swapchain& oldSwapchain, const SwapchainConfig& config)
+            : device_(&device), surface_(&surface) {
+            selectPresentMode(config.presentMode);
+
+            VkResult result = createSwapchain(graphicsQueue, presentQueue, oldSwapchain.resource(), config.minimumImageCount);
 
             if (result != VK_SUCCESS) {
-                std::printf("error: failed to retrieve swapchain images\n");
+                std::printf("error: failed to create swapchain\n");
                 std::exit(1);
             }
 
-            std::vector<VkImage> images(swapchainImageCount);
-            images_.reserve(swapchainImageCount);
+            oldSwapchain.destroy();
 
-            result = vkGetSwapchainImagesKHR(*device_, resource(), &swapchainImageCount, images.data());
-
-            if (result != VK_SUCCESS) {
-                std::printf("error: failed to retrieve swapchain images\n");
-                std::exit(1);
-            }
-
-            for (auto& image : images) {
-                images_.emplace_back(image, ImageProvider::Swapchain);
-            }
+            getImages();
         }
 
         /**
@@ -161,75 +141,48 @@ namespace lumina::render {
             device_ = &device;
             surface_ = &surface;
 
-            SurfaceCapabilities capabilities = getSurfaceCapabilities(config);
-            VkSurfaceFormatKHR surfaceFormat = selectSurfaceFormat();
+            selectPresentMode(config.presentMode);
 
-            VkSwapchainCreateInfoKHR createInfo = {
-                .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
-                .pNext = nullptr,
-                .flags = 0,
-                .surface = *surface_,
-                .minImageCount = capabilities.minimumImageCount,
-                .imageFormat = surfaceFormat.format,
-                .imageColorSpace = surfaceFormat.colorSpace,
-                .imageExtent = capabilities.extent,
-                .imageArrayLayers = 1,
-                .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-                .imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
-                .queueFamilyIndexCount = 0,
-                .pQueueFamilyIndices = nullptr,
-                .preTransform = capabilities.transform,
-                .compositeAlpha = capabilities.compositeAlpha,
-                .presentMode = selectPresentMode(config),
-                .clipped = VK_TRUE,
-                .oldSwapchain = nullptr,
-            };
-
-            QueueAssignment graphicsAssignment = graphicsQueue.assignment();
-            QueueAssignment presentAssignment = presentQueue.assignment();
-
-            bool needsExclusive = graphicsAssignment.familyIndex != presentAssignment.familyIndex;
-
-            std::array<std::uint32_t, 2> familyIndices = {
-                graphicsAssignment.familyIndex,
-                presentAssignment.familyIndex,
-            };
-
-            if (needsExclusive) {
-                createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
-                createInfo.queueFamilyIndexCount = 2,
-                createInfo.pQueueFamilyIndices = familyIndices.data();
-            }
-
-            VkResult result = vkCreateSwapchainKHR(*device_, &createInfo, nullptr, &resource());
+            VkResult result = createSwapchain(graphicsQueue, presentQueue, nullptr, config.minimumImageCount);
 
             if (result != VK_SUCCESS) {
                 std::printf("error: failed to create swapchain\n");
                 std::exit(1);
             }
 
-            std::uint32_t swapchainImageCount = 0;
+            getImages();
+        }
 
-            result = vkGetSwapchainImagesKHR(*device_, resource(), &swapchainImageCount, nullptr);
+        /**
+         * @brief Construct a new swapchain.
+         *
+         * @param device The swapchain-enabled device to operate with.
+         * @param surface The surface to output to.
+         * @param graphicsQueue The queue that will render to this swapchain's images.
+         * @param presentQueue The queue that will present the images of the swapchain to the surface.
+         * @param oldSwapchain The swapchain this will replace.
+         * @param config The swapchain configuration to use.
+         */
+        void create(Device& device, Surface& surface, Queue& graphicsQueue, Queue& presentQueue, Swapchain& oldSwapchain, const SwapchainConfig& config) {
+            if (*this) {
+                return;
+            }
+
+            device_ = &device;
+            surface_ = &surface;
+
+            selectPresentMode(config.presentMode);
+
+            VkResult result = createSwapchain(graphicsQueue, presentQueue, oldSwapchain.resource(), config.minimumImageCount);
 
             if (result != VK_SUCCESS) {
-                std::printf("error: failed to retrieve swapchain images\n");
+                std::printf("error: failed to create swapchain\n");
                 std::exit(1);
             }
 
-            std::vector<VkImage> images(swapchainImageCount);
-            images_.reserve(swapchainImageCount);
+            oldSwapchain.destroy();
 
-            result = vkGetSwapchainImagesKHR(*device_, resource(), &swapchainImageCount, images.data());
-
-            if (result != VK_SUCCESS) {
-                std::printf("error: failed to retrieve swapchain images\n");
-                std::exit(1);
-            }
-
-            for (auto& image : images) {
-                images_.emplace_back(image, ImageProvider::Swapchain);
-            }
+            getImages();
         }
 
         /**
@@ -246,6 +199,55 @@ namespace lumina::render {
             device_ = nullptr;
 
             invalidate();
+        }
+
+        [[nodiscard]] SwapchainAcquireResult acquire(Semaphore& semaphore, Fence& fence) {
+            std::uint32_t imageIndex = 0;
+            SwapchainStatus status = SwapchainStatus::Nominal;
+
+            VkAcquireNextImageInfoKHR acquireInfo = {
+                .sType = VK_STRUCTURE_TYPE_ACQUIRE_NEXT_IMAGE_INFO_KHR,
+                .pNext = nullptr,
+                .swapchain = resource(),
+                .timeout = UINT64_MAX,
+                .semaphore = semaphore,
+                .fence = fence,
+                .deviceMask = 1,
+            };
+
+            VkResult result = vkAcquireNextImage2KHR(*device_, &acquireInfo, &imageIndex);
+
+            switch (result) {
+                case VK_SUCCESS: {
+                    status = SwapchainStatus::Nominal;
+
+                    break;
+                }
+                case VK_SUBOPTIMAL_KHR: {
+                    status = SwapchainStatus::Suboptimal;
+
+                    break;
+                }
+                case VK_ERROR_OUT_OF_DATE_KHR: {
+                    status = SwapchainStatus::SelfInvalid;
+
+                    break;
+                }
+                case VK_ERROR_SURFACE_LOST_KHR: {
+                    status = SwapchainStatus::SurfaceInvalid;
+
+                    break;
+                }
+                default: {
+                    std::printf("error: failed to acquire next swapchain image\n");
+                    std::exit(1);
+                }
+            }
+
+            return SwapchainAcquireResult{
+                .imageIndex = imageIndex,
+                .status = status,
+            };
         }
 
         /**
@@ -270,6 +272,76 @@ namespace lumina::render {
         Device* device_ = nullptr;
         Surface* surface_ = nullptr;
         std::vector<Image> images_;
+        VkPresentModeKHR presentMode_;
+
+        [[nodiscard]] VkResult createSwapchain(Queue& graphicsQueue, Queue& presentQueue, VkSwapchainKHR oldSwapchain, std::uint32_t minimumImageCount) {
+            SurfaceCapabilities capabilities = getSurfaceCapabilities(minimumImageCount);
+            VkSurfaceFormatKHR surfaceFormat = selectSurfaceFormat();
+
+            VkSwapchainCreateInfoKHR createInfo = {
+                .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+                .pNext = nullptr,
+                .flags = 0,
+                .surface = *surface_,
+                .minImageCount = capabilities.minimumImageCount,
+                .imageFormat = surfaceFormat.format,
+                .imageColorSpace = surfaceFormat.colorSpace,
+                .imageExtent = capabilities.extent,
+                .imageArrayLayers = 1,
+                .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+                .imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
+                .queueFamilyIndexCount = 0,
+                .pQueueFamilyIndices = nullptr,
+                .preTransform = capabilities.transform,
+                .compositeAlpha = capabilities.compositeAlpha,
+                .presentMode = presentMode_,
+                .clipped = VK_TRUE,
+                .oldSwapchain = oldSwapchain,
+            };
+
+            QueueAssignment graphicsAssignment = graphicsQueue.assignment();
+            QueueAssignment presentAssignment = presentQueue.assignment();
+
+            bool needsExclusive = graphicsAssignment.familyIndex != presentAssignment.familyIndex;
+
+            std::array<std::uint32_t, 2> familyIndices = {
+                graphicsAssignment.familyIndex,
+                presentAssignment.familyIndex,
+            };
+
+            if (needsExclusive) {
+                createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
+                createInfo.queueFamilyIndexCount = 2,
+                createInfo.pQueueFamilyIndices = familyIndices.data();
+            }
+
+            return vkCreateSwapchainKHR(*device_, &createInfo, nullptr, &resource());
+        }
+
+        void getImages() {
+            std::uint32_t swapchainImageCount = 0;
+
+            VkResult result = vkGetSwapchainImagesKHR(*device_, resource(), &swapchainImageCount, nullptr);
+
+            if (result != VK_SUCCESS) {
+                std::printf("error: failed to retrieve swapchain images\n");
+                std::exit(1);
+            }
+
+            std::vector<VkImage> images(swapchainImageCount);
+            images_.reserve(swapchainImageCount);
+
+            result = vkGetSwapchainImagesKHR(*device_, resource(), &swapchainImageCount, images.data());
+
+            if (result != VK_SUCCESS) {
+                std::printf("error: failed to retrieve swapchain images\n");
+                std::exit(1);
+            }
+
+            for (auto& image : images) {
+                images_.emplace_back(image, ImageProvider::Swapchain);
+            }
+        }
 
         [[nodiscard]] static VkCompositeAlphaFlagBitsKHR selectCompositeAlpha(VkCompositeAlphaFlagsKHR supported) {
             static constexpr VkCompositeAlphaFlagBitsKHR candidates[] = {
@@ -288,7 +360,7 @@ namespace lumina::render {
             return VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
         }
 
-        [[nodiscard]] SurfaceCapabilities getSurfaceCapabilities(const SwapchainConfig& config) {
+        [[nodiscard]] SurfaceCapabilities getSurfaceCapabilities(std::uint32_t minimumImageCount) {
             VkPhysicalDevice physicalDevice = device_->physicalDevice();
             VkSurfaceKHR surface = *surface_;
 
@@ -304,14 +376,14 @@ namespace lumina::render {
             }
 
             return {
-                .minimumImageCount = std::clamp(config.minimumImageCount, surfaceCapabilities.minImageCount, surfaceCapabilities.maxImageCount),
+                .minimumImageCount = std::clamp(minimumImageCount, surfaceCapabilities.minImageCount, surfaceCapabilities.maxImageCount),
                 .extent = extent,
                 .transform = surfaceCapabilities.currentTransform,
                 .compositeAlpha = selectCompositeAlpha(surfaceCapabilities.supportedCompositeAlpha),
             };
         }
 
-        [[nodiscard]] VkPresentModeKHR selectPresentMode(const SwapchainConfig& config) {
+        void selectPresentMode(SwapchainPresentMode presentMode) {
             VkPhysicalDevice physicalDevice = device_->physicalDevice();
             VkSurfaceKHR surface = *surface_;
 
@@ -340,15 +412,15 @@ namespace lumina::render {
                 {SwapchainPresentMode::Synchronous, VK_PRESENT_MODE_FIFO_KHR},
             };
 
-            auto start = std::ranges::find(chain, config.presentMode, &std::pair<SwapchainPresentMode, VkPresentModeKHR>::first);
+            auto start = std::ranges::find(chain, presentMode, &std::pair<SwapchainPresentMode, VkPresentModeKHR>::first);
 
             for (auto it = start; it != std::end(chain); ++it) {
                 if (std::ranges::find(presentModes, it->second) != presentModes.end()) {
-                    return it->second;
+                    presentMode_ = it->second;
                 }
             }
 
-            return VK_PRESENT_MODE_FIFO_KHR;
+            presentMode_ = VK_PRESENT_MODE_FIFO_KHR;
         }
 
         [[nodiscard]] VkSurfaceFormatKHR selectSurfaceFormat() {
