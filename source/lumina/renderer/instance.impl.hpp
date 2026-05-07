@@ -8,7 +8,7 @@
 #include <lumina/meta/exceptions.hpp>
 
 namespace lumina::renderer {
-    inline Instance::Instance(const InstanceInfo& info)
+    inline Instance::Instance(const ApplicationInfo& info)
         : debugging_(info.features.debugging) {
         auto& features = info.features;
 
@@ -116,6 +116,10 @@ namespace lumina::renderer {
         }
     }
 
+    inline void Instance::update() {
+        glfwPollEvents();
+    }
+
     inline void Instance::initialiseSystemAPI() const {
         glfwSetErrorCallback(GLFW_errorCallback);
         glfwInit();
@@ -172,7 +176,7 @@ namespace lumina::renderer {
         return layers;
     }
 
-    inline void Instance::appendRequiredExtensions(const InstanceFeatures&, Names& requirements) const {
+    inline void Instance::appendRequiredExtensions(const Features&, Names& requirements) const {
         std::uint32_t windowExtensionCount = 0;
 
         const char** windowExtensions = glfwGetRequiredInstanceExtensions(&windowExtensionCount);
@@ -204,7 +208,7 @@ namespace lumina::renderer {
         return found ? VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR : 0;
     }
 
-    inline void Instance::appendRequiredLayers(const InstanceFeatures& features, Names& requirements) const {
+    inline void Instance::appendRequiredLayers(const Features& features, Names& requirements) const {
         if (features.validation) {
             requirements.emplace_back("VK_LAYER_KHRONOS_validation");
         }

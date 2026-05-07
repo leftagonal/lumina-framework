@@ -1,16 +1,19 @@
 #pragma once
 
+#include "../instance.hpp"
+#include "../vulkan.hpp"
 #include "device.hpp"
-#include "instance.hpp"
 #include "presenter.hpp"
-#include "vulkan.hpp"
 
 #include <lumina/meta/console.hpp>
 #include <lumina/meta/exceptions.hpp>
 
-namespace lumina::renderer {
-    inline Device::Device(Presenter& presenter, const DeviceRequirements& requirements)
-        : debugging_(presenter.instance().debugging()), instance_(&presenter.instance()) {
+namespace lumina::renderer::subsystems {
+    inline void Device::connect(Presenter& presenter, const DeviceRequirements& requirements) {
+        if (instance_ != nullptr) {
+            throw meta::Exception("device has already been created");
+        }
+
         if (presenter.count() == 0) {
             throw meta::Exception("minimum one window is required for device creation");
         }
@@ -18,6 +21,9 @@ namespace lumina::renderer {
         if (presenter.bound()) {
             throw meta::Exception("provided presenter is already in-use by a different device");
         }
+
+        debugging_ = presenter.instance().debugging();
+        instance_ = &presenter.instance();
 
         PhysicalDevices physicalDevices = getAvailablePhysicalDevices();
 
@@ -68,7 +74,7 @@ namespace lumina::renderer {
         meta::LogDebug(debugging_, "Vulkan queues assigned");
     }
 
-    inline Device::~Device() {
+    inline void Device::disconnect() {
         if (device_ != nullptr) {
             vkDestroyDevice(device_, nullptr);
 
@@ -81,6 +87,10 @@ namespace lumina::renderer {
 
             meta::LogDebug(debugging_, "Vulkan device destroyed");
         }
+    }
+
+    inline Device::~Device() {
+        disconnect();
     }
 
     inline Device::PhysicalDevices Device::getAvailablePhysicalDevices() const {

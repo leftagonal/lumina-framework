@@ -1,27 +1,31 @@
 #pragma once
 
+#include "../instance.hpp"
 #include "device.hpp"
-#include "instance.hpp"
 #include "presenter.hpp"
 
 #include <lumina/meta/console.hpp>
 #include <lumina/meta/exceptions.hpp>
 
-namespace lumina::renderer {
+namespace lumina::renderer::subsystems {
     inline Presenter::Presenter(Instance& instance)
         : debugging_(instance.debugging()), instance_(&instance) {
     }
 
     inline Presenter::~Presenter() {
+        reset();
+    }
+
+    inline void Presenter::reset() {
         if (!windows_.empty()) {
             for (std::size_t i = 0; i < windows_.size(); ++i) {
                 destroy(i);
             }
 
             windows_.clear();
-        }
 
-        meta::LogDebug(debugging_, "presenter destroyed");
+            meta::LogDebug(debugging_, "presenter destroyed");
+        }
     }
 
     inline WindowHandle Presenter::create(const WindowInfo& info) {
@@ -138,10 +142,6 @@ namespace lumina::renderer {
         }
 
         freeList_.emplace_back(handle.id());
-    }
-
-    inline void Presenter::update() {
-        glfwPollEvents();
     }
 
     inline void Presenter::resizeCallback(GLFWwindow* window, int width, int height) {
