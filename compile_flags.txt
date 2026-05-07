@@ -8,3 +8,6 @@
 -Wdouble-promotion
 -Wheader-hygiene
 -Wmissing-include-dirs
+-DLUMINA_VERSION_MAJOR=0
+-DLUMINA_VERSION_MINOR=1
+-DLUMINA_VERSION_PATCH=0

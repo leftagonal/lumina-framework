@@ -9,6 +9,10 @@ project(
     LANGUAGES CXX
 )
 
+set(LUMINA_VERSION_MAJOR ${PROJECT_VERSION_MAJOR})
+set(LUMINA_VERSION_MINOR ${PROJECT_VERSION_MINOR})
+set(LUMINA_VERSION_PATCH ${PROJECT_VERSION_PATCH})
+
 find_package(glfw3 REQUIRED)
 find_package(Vulkan REQUIRED)
 
@@ -25,6 +29,12 @@ target_compile_features(lumina INTERFACE cxx_std_20)
 target_link_libraries(lumina INTERFACE
     glfw
     Vulkan::Vulkan
+)
+
+target_compile_definitions(lumina INTERFACE
+    LUMINA_VERSION_MAJOR=${LUMINA_VERSION_MAJOR}
+    LUMINA_VERSION_MINOR=${LUMINA_VERSION_MINOR}
+    LUMINA_VERSION_PATCH=${LUMINA_VERSION_PATCH}
 )
 
 write_basic_package_version_file(

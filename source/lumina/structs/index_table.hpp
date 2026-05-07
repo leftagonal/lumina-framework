@@ -78,6 +78,11 @@ namespace lumina::structs {
             pop();
         }
 
+        void clear() {
+            dense_.clear();
+            sparse_.clear();
+        }
+
         [[nodiscard]] const std::vector<IndexType>& dense() const {
             return dense_;
         }
