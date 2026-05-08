@@ -3,6 +3,7 @@
 #include <vulkan/vulkan.h>
 
 #include <vector>
+#include <cstdint>
 
 namespace lumina::renderer {
     enum class DeviceType {

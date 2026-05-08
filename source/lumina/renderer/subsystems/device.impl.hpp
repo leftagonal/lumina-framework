@@ -8,6 +8,8 @@
 #include <lumina/meta/console.hpp>
 #include <lumina/meta/exceptions.hpp>
 
+#include <unordered_map>
+
 namespace lumina::renderer::subsystems {
     inline void Device::connect(Presenter& presenter, const DeviceRequirements& requirements) {
         if (instance_ != nullptr) {
@@ -259,16 +261,21 @@ namespace lumina::renderer::subsystems {
 
     inline Device::QueueCreateInfos Device::makeQueueCreateInfos(const QueueFamilySelections& queueSelections) const {
         QueueCreateInfos queueCreateInfos;
+        
         std::unordered_map<std::uint32_t, VkDeviceQueueCreateInfo> queueCreateInfoMap;
 
         for (auto& selection : queueSelections) {
-            if (queueCreateInfoMap.contains(selection.familyIndex))
+            if (queueCreateInfoMap.contains(selection.familyIndex)) {
                 continue;
+            }
 
             queueCreateInfoMap[selection.familyIndex] = VkDeviceQueueCreateInfo{
                 .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+                .pNext = nullptr,
+                .flags = 0,
                 .queueFamilyIndex = selection.familyIndex,
                 .queueCount = 1,
+                .pQueuePriorities = nullptr,
             };
         }
 
