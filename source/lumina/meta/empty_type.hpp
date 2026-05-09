@@ -2,7 +2,7 @@
 
 #include <type_traits>
 
-namespace lumina::traits {
+namespace lumina::meta {
     template <typename T>
     concept EmptyType = std::is_empty_v<T> &&
                         std::is_standard_layout_v<T>;

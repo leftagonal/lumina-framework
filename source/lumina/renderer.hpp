@@ -1,7 +1,9 @@
 #pragma once
 
-#include "renderer/connection.impl.hpp"
-#include "renderer/instance.impl.hpp"
+#include "framework/information.hpp"
+#include "framework/standard.hpp"
 
-#include "renderer/subsystems/device.impl.hpp"
-#include "renderer/subsystems/presenter.impl.hpp"
+#include "renderer/connection.inl"
+#include "renderer/device.inl"
+#include "renderer/instance.inl"
+#include "renderer/presenter.inl"

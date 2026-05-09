@@ -1,7 +1,7 @@
 #pragma once
 
-#include "subsystems/device.hpp"
-#include "subsystems/presenter.hpp"
+#include "device.hpp"
+#include "presenter.hpp"
 
 namespace lumina::renderer {
     class Instance;

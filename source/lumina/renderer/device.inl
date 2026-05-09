@@ -1,9 +1,9 @@
 #pragma once
 
-#include "../instance.hpp"
-#include "../vulkan.hpp"
 #include "device.hpp"
+#include "instance.hpp"
 #include "presenter.hpp"
+#include "vulkan.hpp"
 
 #include <lumina/meta/console.hpp>
 #include <lumina/meta/exceptions.hpp>
@@ -12,17 +12,9 @@
 
 namespace lumina::renderer::subsystems {
     inline void Device::connect(Presenter& presenter, const DeviceRequirements& requirements) {
-        if (instance_ != nullptr) {
-            throw meta::Exception("device has already been created");
-        }
-
-        if (presenter.count() == 0) {
-            throw meta::Exception("minimum one window is required for device creation");
-        }
-
-        if (presenter.bound()) {
-            throw meta::Exception("provided presenter is already in-use by a different device");
-        }
+        meta::assert(instance_ == nullptr, "device has already been created");
+        meta::assert(presenter.count() > 0, "minimum one window is required for device creation");
+        meta::assert(!presenter.bound(), "provided presenter is already in-use by a different device");
 
         debugging_ = presenter.instance().debugging();
         instance_ = &presenter.instance();
@@ -43,9 +35,9 @@ namespace lumina::renderer::subsystems {
 
         tryEnableCompatibility(requiredExtensions, extensionProperties);
 
-        if (!testRequirements(requiredExtensions, extensionProperties)) {
-            throw meta::Exception("one or more required Vulkan device extensions are unavailable");
-        }
+        meta::assert(
+            testRequirements(requiredExtensions, extensionProperties),
+            "one or more required Vulkan device extensions are unavailable");
 
         VkDeviceCreateInfo createInfo = {
             .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
@@ -62,18 +54,15 @@ namespace lumina::renderer::subsystems {
 
         VkResult result = vkCreateDevice(physicalDevice_, &createInfo, nullptr, &device_);
 
-        if (result != VK_SUCCESS) {
-            throw meta::Exception("logical device creation failed: {}", Vulkan_errorString(result));
-        }
-
-        meta::LogDebug(debugging_, "Vulkan device initialised");
+        meta::assert(result == VK_SUCCESS, "logical device creation failed: {}", Vulkan_errorString(result));
+        meta::logDebug(debugging_, "Vulkan logical device initialised");
 
         vkGetDeviceQueue(device_, queueSelections[0].familyIndex, queueSelections[0].queueIndex, &presentQueue_);
         vkGetDeviceQueue(device_, queueSelections[1].familyIndex, queueSelections[1].queueIndex, &graphicsQueue_);
         vkGetDeviceQueue(device_, queueSelections[2].familyIndex, queueSelections[2].queueIndex, &computeQueue_);
         vkGetDeviceQueue(device_, queueSelections[3].familyIndex, queueSelections[3].queueIndex, &transferQueue_);
 
-        meta::LogDebug(debugging_, "Vulkan queues assigned");
+        meta::logDebug(debugging_, "Vulkan queues assigned");
     }
 
     inline void Device::disconnect() {
@@ -87,7 +76,7 @@ namespace lumina::renderer::subsystems {
             transferQueue_ = nullptr;
             instance_ = nullptr;
 
-            meta::LogDebug(debugging_, "Vulkan device destroyed");
+            meta::logDebug(debugging_, "Vulkan logical device destroyed");
         }
     }
 
@@ -102,17 +91,13 @@ namespace lumina::renderer::subsystems {
 
         VkResult result = vkEnumeratePhysicalDevices(instance, &physicalDeviceCount, nullptr);
 
-        if (result != VK_SUCCESS) {
-            throw meta::Exception("failed to enumerate Vulkan physical devices: {}", Vulkan_errorString(result));
-        }
+        meta::assert(result == VK_SUCCESS, "failed to enumerate Vulkan physical devices: {}", Vulkan_errorString(result));
 
         std::vector<VkPhysicalDevice> physicalDevices(physicalDeviceCount);
 
         result = vkEnumeratePhysicalDevices(instance, &physicalDeviceCount, physicalDevices.data());
 
-        if (result != VK_SUCCESS) {
-            throw meta::Exception("failed to enumerate Vulkan physical devices: {}", Vulkan_errorString(result));
-        }
+        meta::assert(result == VK_SUCCESS, "failed to enumerate Vulkan physical devices: {}", Vulkan_errorString(result));
 
         return physicalDevices;
     }
@@ -140,11 +125,11 @@ namespace lumina::renderer::subsystems {
 
         vkGetPhysicalDeviceProperties(physicalDevice_, &properties);
 
-        meta::LogDebug(debugging_, "Vulkan physical device selected:");
+        meta::logDebug(debugging_, "Vulkan physical device selected:");
 
-        meta::LogDebugNoHeader(debugging_, "\tname: {}", properties.deviceName);
-        meta::LogDebugNoHeader(debugging_, "\tdevice ID: {}", properties.deviceID);
-        meta::LogDebugNoHeader(debugging_, "\tvendor ID: {}", properties.vendorID);
+        meta::logDebugListElement(debugging_, 1, "name: {}", properties.deviceName);
+        meta::logDebugListElement(debugging_, 1, "device ID: {}", properties.deviceID);
+        meta::logDebugListElement(debugging_, 1, "vendor ID: {}", properties.vendorID);
     }
 
     inline Device::QueueFamilySelections Device::pickSuitableQueueFamilies(const QueueFamilies& families, Presenter& presenter) const {
@@ -161,9 +146,7 @@ namespace lumina::renderer::subsystems {
             VkBool32 supported = VK_FALSE;
             VkResult result = vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice_, i, drivingSurface, &supported);
 
-            if (result != VK_SUCCESS) {
-                throw meta::Exception("failed to query device presentation support");
-            }
+            meta::assert(result == VK_SUCCESS, "failed to query physical device's presentation support");
 
             bool isPresentCapable = supported == VK_TRUE;
             bool isGraphicsCapable = family.queueFlags & VK_QUEUE_GRAPHICS_BIT;
@@ -187,13 +170,8 @@ namespace lumina::renderer::subsystems {
             }
         }
 
-        if (!present) {
-            throw meta::Exception("physical device does not expose any present-capable queues");
-        }
-
-        if (!graphics) {
-            throw meta::Exception("physical device does not expose any graphics-capable queues");
-        }
+        meta::assert(present.has_value(), "physical device does not expose any present-capable queues");
+        meta::assert(graphics.has_value(), "physical device does not expose any graphics-capable queues");
 
         // identify and prefer dedicated families
         for (std::uint32_t i = 0; i < families.size(); ++i) {
@@ -233,23 +211,23 @@ namespace lumina::renderer::subsystems {
         }
 
         if (!compute) {
-            meta::LogDebug(debugging_, "Vulkan compute queue falling back to graphics queue");
+            meta::logDebug(debugging_, "Vulkan compute queue falling back to graphics queue");
 
             compute = graphics;
         }
 
         if (!transfer) {
-            meta::LogDebug(debugging_, "Vulkan transfer queue falling back to graphics queue");
+            meta::logDebug(debugging_, "Vulkan transfer queue falling back to graphics queue");
 
             transfer = graphics;
         }
 
-        meta::LogDebug(debugging_, "Vulkan queues have been identified:");
+        meta::logDebug(debugging_, "Vulkan queues have been identified:");
 
-        meta::LogDebugNoHeader(debugging_, "\tpresent: family {}, index {}", present->familyIndex, present->queueIndex);
-        meta::LogDebugNoHeader(debugging_, "\tgraphics: family {}, index {}", graphics->familyIndex, graphics->queueIndex);
-        meta::LogDebugNoHeader(debugging_, "\tcompute: family {}, index {}", compute->familyIndex, compute->queueIndex);
-        meta::LogDebugNoHeader(debugging_, "\ttransfer: family {}, index {}", transfer->familyIndex, transfer->queueIndex);
+        meta::logDebugListElement(debugging_, 1, "present: family {}, index {}", present->familyIndex, present->queueIndex);
+        meta::logDebugListElement(debugging_, 1, "graphics: family {}, index {}", graphics->familyIndex, graphics->queueIndex);
+        meta::logDebugListElement(debugging_, 1, "compute: family {}, index {}", compute->familyIndex, compute->queueIndex);
+        meta::logDebugListElement(debugging_, 1, "transfer: family {}, index {}", transfer->familyIndex, transfer->queueIndex);
 
         return QueueFamilySelections{
             present.value(),
@@ -261,7 +239,7 @@ namespace lumina::renderer::subsystems {
 
     inline Device::QueueCreateInfos Device::makeQueueCreateInfos(const QueueFamilySelections& queueSelections) const {
         QueueCreateInfos queueCreateInfos;
-        
+
         std::unordered_map<std::uint32_t, VkDeviceQueueCreateInfo> queueCreateInfoMap;
 
         for (auto& selection : queueSelections) {
@@ -294,17 +272,13 @@ namespace lumina::renderer::subsystems {
 
         VkResult result = vkEnumerateDeviceExtensionProperties(physicalDevice_, nullptr, &extensionCount, nullptr);
 
-        if (result != VK_SUCCESS) {
-            throw meta::Exception("enumerating available Vulkan device extensions failed: {}", Vulkan_errorString(result));
-        }
+        meta::assert(result == VK_SUCCESS, "failed to enumerate available Vulkan physical device extensions: {}", Vulkan_errorString(result));
 
         ExtensionProperties extensions(extensionCount);
 
         result = vkEnumerateDeviceExtensionProperties(physicalDevice_, nullptr, &extensionCount, extensions.data());
 
-        if (result != VK_SUCCESS) {
-            throw meta::Exception("enumerating available Vulkan device extensions failed: {}", Vulkan_errorString(result));
-        }
+        meta::assert(result == VK_SUCCESS, "failed to enumerate available Vulkan physical device extensions: {}", Vulkan_errorString(result));
 
         return extensions;
     }
@@ -322,10 +296,7 @@ namespace lumina::renderer::subsystems {
     inline bool Device::testRequirements(const Names& requirements, const ExtensionProperties& available) const {
         bool succeeded = true;
 
-        meta::LogDebug(
-            debugging_,
-            "required Vulkan device extensions: {}",
-            requirements.size());
+        meta::logDebug(debugging_, "required Vulkan device extensions: {}", requirements.size());
 
         for (auto& requirement : requirements) {
             bool found = false;
@@ -334,17 +305,14 @@ namespace lumina::renderer::subsystems {
                 if (std::string_view(requirement) == candidate.extensionName) {
                     found = true;
 
-                    meta::LogDebugNoHeader(
-                        debugging_,
-                        "\t{}",
-                        requirement);
+                    meta::logDebugListElement(debugging_, 1, "{}", requirement);
 
                     break;
                 }
             }
 
             if (!found) {
-                meta::LogError("Vulkan device extension is required but unsupported: {}", requirement);
+                meta::logError("Vulkan device extension is required but unsupported: {}", requirement);
 
                 succeeded = false;
             }

@@ -1,8 +1,8 @@
 
 #pragma once
 
-#include "../glfw.hpp"
-#include "../handle.hpp"
+#include "glfw.hpp"
+#include "handle.hpp"
 
 #include <vector>
 

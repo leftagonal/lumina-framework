@@ -1,11 +1,11 @@
 #pragma once
 
-#include <lumina/structs/striding_iterator.hpp>
+#include "striding_iterator.hpp"
 
 #include <algorithm>
 #include <cstddef>
 
-namespace lumina::structs {
+namespace lumina::meta {
     /**
      * @brief A resizable region of memory.
      *

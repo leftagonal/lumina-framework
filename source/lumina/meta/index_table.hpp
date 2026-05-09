@@ -2,7 +2,7 @@
 
 #include <vector>
 
-namespace lumina::structs {
+namespace lumina::meta {
     template <std::unsigned_integral T>
     class IndexTable final {
     public:

@@ -102,7 +102,7 @@ namespace lumina::renderer {
                 Vulkan_errorString(result));
         }
 
-        meta::LogDebug(debugging_, "Vulkan instance initialised");
+        meta::logDebug(debugging_, "Vulkan instance initialised");
     }
 
     inline Instance::~Instance() {
@@ -112,7 +112,7 @@ namespace lumina::renderer {
 
             instance_ = nullptr;
 
-            meta::LogDebug(debugging_, "Vulkan instance destroyed");
+            meta::logDebug(debugging_, "Vulkan instance destroyed");
         }
     }
 
@@ -217,7 +217,7 @@ namespace lumina::renderer {
     inline bool Instance::testRequirements(const Names& requirements, const ExtensionProperties& available) const {
         bool succeeded = true;
 
-        meta::LogDebug(
+        meta::logDebug(
             debugging_,
             "required Vulkan instance extensions: {}",
             requirements.size());
@@ -229,9 +229,10 @@ namespace lumina::renderer {
                 if (std::string_view(requirement) == candidate.extensionName) {
                     found = true;
 
-                    meta::LogDebugNoHeader(
+                    meta::logDebugListElement(
                         debugging_,
-                        "\t{}",
+                        1,
+                        "{}",
                         requirement);
 
                     break;
@@ -239,7 +240,7 @@ namespace lumina::renderer {
             }
 
             if (!found) {
-                meta::LogError("Vulkan instance extension is required but unsupported: {}", requirement);
+                meta::logError("Vulkan instance extension is required but unsupported: {}", requirement);
 
                 succeeded = false;
             }
@@ -251,7 +252,7 @@ namespace lumina::renderer {
     inline bool Instance::testRequirements(const Names& requirements, const LayerProperties& available) const {
         bool succeeded = true;
 
-        meta::LogDebug(
+        meta::logDebug(
             debugging_,
             "required Vulkan instance layers: {}",
             requirements.size());
@@ -263,9 +264,10 @@ namespace lumina::renderer {
                 if (std::string_view(requirement) == candidate.layerName) {
                     found = true;
 
-                    meta::LogDebugNoHeader(
+                    meta::logDebugListElement(
                         debugging_,
-                        "\t{}",
+                        1,
+                        "{}",
                         requirement);
 
                     break;
@@ -273,7 +275,7 @@ namespace lumina::renderer {
             }
 
             if (!found) {
-                meta::LogError("Vulkan instance layer is required but unsupported: {}", requirement);
+                meta::logError("Vulkan instance layer is required but unsupported: {}", requirement);
 
                 succeeded = false;
             }
@@ -293,7 +295,7 @@ namespace lumina::renderer {
                 Vulkan_errorString(result));
         }
 
-        meta::LogDebug(
+        meta::logDebug(
             debugging_,
             "driver Vulkan version: {}.{}.{}",
             VK_API_VERSION_MAJOR(supportedVersion),

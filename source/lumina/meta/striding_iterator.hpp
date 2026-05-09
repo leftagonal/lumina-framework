@@ -3,7 +3,7 @@
 #include <cstddef>
 #include <iterator>
 
-namespace lumina::structs {
+namespace lumina::meta {
     template <typename T, bool Const>
     class BasicStridingIterator final {
     public:

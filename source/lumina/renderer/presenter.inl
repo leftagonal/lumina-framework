@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../instance.hpp"
 #include "device.hpp"
+#include "instance.hpp"
 #include "presenter.hpp"
 
 #include <lumina/meta/console.hpp>
@@ -24,7 +24,7 @@ namespace lumina::renderer::subsystems {
 
             windows_.clear();
 
-            meta::LogDebug(debugging_, "presenter destroyed");
+            meta::logDebug(debugging_, "presenter destroyed");
         }
     }
 
@@ -73,10 +73,10 @@ namespace lumina::renderer::subsystems {
             nullptr,
             nullptr);
 
-        meta::LogDebug(debugging_, "created window (handle: {}):", id);
-        meta::LogDebugNoHeader(debugging_, "\ttitle: {}", window->title);
-        meta::LogDebugNoHeader(debugging_, "\textent: {}x{}", window->extent.width, window->extent.height);
-        meta::LogDebugNoHeader(debugging_, "\tresizable: {}", window->resizable);
+        meta::logDebug(debugging_, "created window (handle: {}):", id);
+        meta::logDebugListElement(debugging_, 1, "title: {}", window->title);
+        meta::logDebugListElement(debugging_, 1, "extent: {}x{}", window->extent.width, window->extent.height);
+        meta::logDebugListElement(debugging_, 1, "resizable: {}", window->resizable);
 
         window->userPointer = std::make_unique<WindowUserPointerData>(id, this);
 
@@ -133,7 +133,7 @@ namespace lumina::renderer::subsystems {
         if (window.resource != nullptr) {
             glfwDestroyWindow(window.resource);
 
-            meta::LogDebug(
+            meta::logDebug(
                 debugging_,
                 "destroyed window (handle: {})",
                 handle.id());
@@ -157,7 +157,7 @@ namespace lumina::renderer::subsystems {
         cache.extent.width = static_cast<std::uint32_t>(width);
         cache.extent.height = static_cast<std::uint32_t>(height);
 
-        meta::LogDebug(
+        meta::logDebug(
             data.presenter->debugging_,
             "window resized (handle: {}, {}x{})",
             data.handle.id(),
@@ -203,7 +203,7 @@ namespace lumina::renderer::subsystems {
                 }
             }
 
-            meta::LogDebug(
+            meta::logDebug(
                 data.presenter->debugging_,
                 "window state change: {} -> {} (handle: {})",
                 lastStatus,
@@ -246,7 +246,7 @@ namespace lumina::renderer::subsystems {
                 currentStatus = "iconified";
             }
 
-            meta::LogDebug(
+            meta::logDebug(
                 data.presenter->debugging_,
                 "window state change: {} -> {} (handle: {})",
                 lastStatus,
@@ -288,7 +288,7 @@ namespace lumina::renderer::subsystems {
                 currentFocus = "unfocused";
             }
 
-            meta::LogDebug(
+            meta::logDebug(
                 data.presenter->debugging_,
                 "window focus change: {} -> {} (handle: {})",
                 lastFocus,

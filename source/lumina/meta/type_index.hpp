@@ -1,8 +1,8 @@
 #pragma once
 
-#include <lumina/traits/empty_type.hpp>
+#include "empty_type.hpp"
 
-namespace lumina::traits {
+namespace lumina::meta {
     using TypeIndex = std::size_t;
 
     template <EmptyType T>
@@ -15,7 +15,7 @@ namespace lumina::traits {
 
     template <EmptyType>
     [[nodiscard]] inline TypeIndex incrementContext() {
-        static TypeIndex value = 0xFFFFFFFFFFFFFFFF;
+        static TypeIndex value = 0xFFFFFFFFFFFFFFFFull;
 
         return ++value;
     }

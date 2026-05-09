@@ -6,6 +6,7 @@
 #include <string_view>
 
 #include <lumina/meta/console.hpp>
+#include <lumina/meta/exceptions.hpp>
 
 namespace lumina::renderer {
     [[nodiscard]] inline std::string_view GLFW_errorString(int errorCode) {
@@ -62,7 +63,6 @@ namespace lumina::renderer {
     }
 
     inline void GLFW_errorCallback(int errorCode, const char* description) {
-        meta::LogError("GLFW error {}: {}", GLFW_errorString(errorCode), description);
-        std::exit(1);
+        meta::criticalFailure("GLFW error {}: {}", GLFW_errorString(errorCode), description);
     }
 }

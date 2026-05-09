@@ -2,7 +2,7 @@
 
 #include <type_traits>
 
-namespace lumina::traits {
+namespace lumina::meta {
     template <typename T>
     concept PODType = std::is_trivially_destructible_v<T> &&
                       std::is_trivially_move_constructible_v<T> &&
