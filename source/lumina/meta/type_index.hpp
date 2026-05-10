@@ -9,9 +9,13 @@ namespace lumina::meta {
     inline constexpr bool IsTypeContext = false;
 
     struct ECSTypeContext {};
+    struct EventsTypeContext {};
 
     template <>
     inline constexpr bool IsTypeContext<ECSTypeContext> = true;
+
+    template <>
+    inline constexpr bool IsTypeContext<EventsTypeContext> = true;
 
     template <EmptyType>
     [[nodiscard]] inline TypeIndex incrementContext() {
