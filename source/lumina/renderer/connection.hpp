@@ -1,7 +1,7 @@
 #pragma once
 
-#include "device.hpp"
-#include "presenter.hpp"
+#include "display_server.hpp"
+#include "logical_device.hpp"
 
 namespace lumina::renderer {
     class Instance;
@@ -12,10 +12,14 @@ namespace lumina::renderer {
      */
     struct ConnectionInfo {
         /// @brief The first window of the connection.
-        WindowInfo initialWindow;
+        WindowInfo pilotWindowInfo;
 
         /// @brief The requirements of the GPU to select.
         DeviceRequirements deviceRequirements;
+    };
+
+    struct OpenResult {
+        WindowHandle pilotWindow;
     };
 
     /**
@@ -31,9 +35,9 @@ namespace lumina::renderer {
          * @brief Connect to a GPU and display server.
          *
          * @param connectionInfo The description of the connection.
-         * @return WindowHandle The first window of the connection.
+         * @return OpenResult The result of opening the connection.
          */
-        WindowHandle open(const ConnectionInfo& connectionInfo);
+        [[nodiscard]] OpenResult open(const ConnectionInfo& connectionInfo);
 
         /**
          * @brief Disconnects from the GPU and display server.
@@ -47,7 +51,7 @@ namespace lumina::renderer {
          * @param windowInfo The setup information for the window.
          * @return WindowHandle The handle for the new window.
          */
-        WindowHandle createWindow(const WindowInfo& windowInfo);
+        [[nodiscard]] WindowHandle createWindow(const WindowInfo& windowInfo);
 
         /**
          * @brief Destroys a given window.
@@ -65,8 +69,8 @@ namespace lumina::renderer {
         [[nodiscard]] WindowAttributes windowAttributes(WindowHandle handle) const;
 
     private:
-        subsystems::Device device_;
-        subsystems::Presenter presenter_;
+        LogicalDevice logicalDevice_;
+        DisplayServer displayServer_;
 
         Instance* instance_;
     };

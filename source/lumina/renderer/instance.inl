@@ -8,33 +8,19 @@
 #include <lumina/meta/exceptions.hpp>
 
 namespace lumina::renderer {
-    inline Instance::Instance(const ApplicationInfo& info)
-        : debugging_(info.features.debugging) {
-        auto& features = info.features;
-
+    inline Instance::Instance(const core::ApplicationInfo& info)
+        : validation_(info.features.validation) {
         initialiseSystemAPI();
 
         std::uint32_t driverVersion = getDriverSupportedVersion();
+        std::uint32_t driverVersionMajor = VK_API_VERSION_MAJOR(driverVersion);
+        std::uint32_t driverVersionMinor = VK_API_VERSION_MINOR(driverVersion);
+        std::uint32_t driverVariant = VK_API_VERSION_VARIANT(driverVersion);
 
-        uint32_t driverVersionMajor = VK_API_VERSION_MAJOR(driverVersion);
-        uint32_t driverVersionMinor = VK_API_VERSION_MINOR(driverVersion);
-        uint32_t driverVariant = VK_API_VERSION_VARIANT(driverVersion);
+        bool vulkan13 = driverVersionMajor >= 1 && driverVersionMinor >= 3;
 
-        if (driverVariant > 0) {
-            throw meta::Exception(
-                "non-standard Vulkan variant detected ({}), cannot proceed",
-                driverVariant);
-        }
-
-        bool notVulkan1 = driverVersionMajor < 1;
-        bool notVulkan13 = driverVersionMajor == 1 && driverVersionMinor < 3;
-
-        if (notVulkan1 || notVulkan13) {
-            throw meta::Exception(
-                "Vulkan 1.3 requirements, system supports {}.{}",
-                driverVersionMajor,
-                driverVersionMinor);
-        }
+        meta::assert(driverVariant == 0, "non-standard Vulkan variant detected ({}), cannot proceed", driverVariant);
+        meta::assert(vulkan13, "Vulkan 1.3 requirements, system supports {}.{}", driverVersionMajor, driverVersionMinor);
 
         ExtensionProperties availableExtensions = getAvailableExtensions();
         LayerProperties availableLayers = getAvailableLayers();
@@ -42,18 +28,15 @@ namespace lumina::renderer {
         Names requiredExtensions;
         Names requiredLayers;
 
-        appendRequiredExtensions(features, requiredExtensions);
-        appendRequiredLayers(features, requiredLayers);
+        appendRequiredExtensions(requiredExtensions);
+        appendRequiredLayers(requiredLayers);
 
         VkInstanceCreateFlags flags = enableCompatibility(requiredExtensions, availableExtensions);
+        bool extensionRequirementsMet = testRequirements(requiredExtensions, availableExtensions);
+        bool layerRequirementsMet = testRequirements(requiredLayers, availableLayers);
 
-        if (!testRequirements(requiredExtensions, availableExtensions)) {
-            throw meta::Exception("one or more required Vulkan instance extensions are unavailable");
-        }
-
-        if (!testRequirements(requiredLayers, availableLayers)) {
-            throw meta::Exception("one or more required Vulkan instance layers are unavailable");
-        }
+        meta::assert(extensionRequirementsMet, "one or more required Vulkan instance extensions are unavailable");
+        meta::assert(layerRequirementsMet, "one or more required Vulkan instance layers are unavailable");
 
         auto appVersionMajor = info.version.major;
         auto appVersionMinor = info.version.minor;
@@ -96,24 +79,21 @@ namespace lumina::renderer {
 
         VkResult result = vkCreateInstance(&createInfo, nullptr, &instance_);
 
-        if (result != VK_SUCCESS) {
-            throw meta::Exception(
-                "Vulkan instance creation failed: {}",
-                Vulkan_errorString(result));
-        }
-
-        meta::logDebug(debugging_, "Vulkan instance initialised");
+        meta::assert(result == VK_SUCCESS, "Vulkan instance creation failed: {}", Vulkan_errorString(result));
+        meta::logDebug(validation_, "Vulkan instance initialised");
     }
 
     inline Instance::~Instance() {
-        if (instance_ != nullptr) {
-            vkDestroyInstance(instance_, nullptr);
-            glfwTerminate();
-
-            instance_ = nullptr;
-
-            meta::logDebug(debugging_, "Vulkan instance destroyed");
+        if (instance_ == nullptr) {
+            return;
         }
+
+        vkDestroyInstance(instance_, nullptr);
+        glfwTerminate();
+
+        instance_ = nullptr;
+
+        meta::logDebug(validation_, "Vulkan instance destroyed");
     }
 
     inline void Instance::update() {
@@ -133,21 +113,13 @@ namespace lumina::renderer {
 
         VkResult result = vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
 
-        if (result != VK_SUCCESS) {
-            throw meta::Exception(
-                "Vulkan instance extension property enumeration failed: {}",
-                Vulkan_errorString(result));
-        }
+        meta::assert(result == VK_SUCCESS, "Vulkan instance extension property enumeration failed: {}", Vulkan_errorString(result));
 
         ExtensionProperties extensions(extensionCount);
 
         result = vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, extensions.data());
 
-        if (result != VK_SUCCESS) {
-            throw meta::Exception(
-                "Vulkan instance extension property enumeration failed: {}",
-                Vulkan_errorString(result));
-        }
+        meta::assert(result == VK_SUCCESS, "Vulkan instance extension property enumeration failed: {}", Vulkan_errorString(result));
 
         return extensions;
     }
@@ -157,33 +129,23 @@ namespace lumina::renderer {
 
         VkResult result = vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
 
-        if (result != VK_SUCCESS) {
-            throw meta::Exception(
-                "Vulkan instance layer property enumeration failed: {}",
-                Vulkan_errorString(result));
-        }
+        meta::assert(result == VK_SUCCESS, "Vulkan instance layer property enumeration failed: {}", Vulkan_errorString(result));
 
         LayerProperties layers(layerCount);
 
         result = vkEnumerateInstanceLayerProperties(&layerCount, layers.data());
 
-        if (result != VK_SUCCESS) {
-            throw meta::Exception(
-                "Vulkan instance layer property enumeration failed: {}",
-                Vulkan_errorString(result));
-        }
+        meta::assert(result == VK_SUCCESS, "Vulkan instance layer property enumeration failed: {}", Vulkan_errorString(result));
 
         return layers;
     }
 
-    inline void Instance::appendRequiredExtensions(const Features&, Names& requirements) const {
+    inline void Instance::appendRequiredExtensions(Names& requirements) const {
         std::uint32_t windowExtensionCount = 0;
 
         const char** windowExtensions = glfwGetRequiredInstanceExtensions(&windowExtensionCount);
 
-        if (windowExtensions == nullptr) {
-            throw meta::Exception("GLFW provided no requirements instance extensions");
-        }
+         meta::assert(windowExtensions != nullptr, "GLFW provided no requirements instance extensions");
 
         requirements.reserve(windowExtensionCount);
 
@@ -208,8 +170,8 @@ namespace lumina::renderer {
         return found ? VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR : 0;
     }
 
-    inline void Instance::appendRequiredLayers(const Features& features, Names& requirements) const {
-        if (features.validation) {
+    inline void Instance::appendRequiredLayers(Names& requirements) const {
+        if (validation_) {
             requirements.emplace_back("VK_LAYER_KHRONOS_validation");
         }
     }
@@ -217,10 +179,7 @@ namespace lumina::renderer {
     inline bool Instance::testRequirements(const Names& requirements, const ExtensionProperties& available) const {
         bool succeeded = true;
 
-        meta::logDebug(
-            debugging_,
-            "required Vulkan instance extensions: {}",
-            requirements.size());
+        meta::logDebug(validation_, "required Vulkan instance extensions: {}", requirements.size());
 
         for (auto& requirement : requirements) {
             bool found = false;
@@ -229,11 +188,7 @@ namespace lumina::renderer {
                 if (std::string_view(requirement) == candidate.extensionName) {
                     found = true;
 
-                    meta::logDebugListElement(
-                        debugging_,
-                        1,
-                        "{}",
-                        requirement);
+                    meta::logDebugListElement(validation_, 1, "{}", requirement);
 
                     break;
                 }
@@ -252,31 +207,25 @@ namespace lumina::renderer {
     inline bool Instance::testRequirements(const Names& requirements, const LayerProperties& available) const {
         bool succeeded = true;
 
-        meta::logDebug(
-            debugging_,
-            "required Vulkan instance layers: {}",
-            requirements.size());
+        meta::logDebug(validation_, "required Vulkan instance layers: {}", requirements.size());
 
         for (auto& requirement : requirements) {
             bool found = false;
 
             for (auto& candidate : available) {
-                if (std::string_view(requirement) == candidate.layerName) {
-                    found = true;
-
-                    meta::logDebugListElement(
-                        debugging_,
-                        1,
-                        "{}",
-                        requirement);
-
-                    break;
+                if (std::string_view(requirement) != candidate.layerName) {
+                    continue;
                 }
+
+                found = true;
+
+                meta::logDebugListElement(validation_, 1, "{}", requirement);
+
+                break;
             }
 
             if (!found) {
                 meta::logError("Vulkan instance layer is required but unsupported: {}", requirement);
-
                 succeeded = false;
             }
         }
@@ -289,18 +238,13 @@ namespace lumina::renderer {
 
         VkResult result = vkEnumerateInstanceVersion(&supportedVersion);
 
-        if (result != VK_SUCCESS) {
-            throw meta::Exception(
-                "Vulkan API version query failed: {}",
-                Vulkan_errorString(result));
-        }
+        meta::assert(result == VK_SUCCESS, "Vulkan API version query failed: {}", Vulkan_errorString(result));
 
-        meta::logDebug(
-            debugging_,
-            "driver Vulkan version: {}.{}.{}",
-            VK_API_VERSION_MAJOR(supportedVersion),
-            VK_API_VERSION_MINOR(supportedVersion),
-            VK_API_VERSION_PATCH(supportedVersion));
+        std::uint32_t major = VK_API_VERSION_MAJOR(supportedVersion);
+        std::uint32_t minor = VK_API_VERSION_MINOR(supportedVersion);
+        std::uint32_t patch = VK_API_VERSION_PATCH(supportedVersion);
+
+        meta::logDebug(validation_, "driver Vulkan version: {}.{}.{}", major, minor, patch);
 
         return supportedVersion;
     }

@@ -4,31 +4,33 @@
 
 namespace lumina::renderer {
     inline Connection::Connection(Instance& instance)
-        : presenter_(instance), instance_(&instance) {
+        : displayServer_(instance), instance_(&instance) {
     }
 
-    inline WindowHandle Connection::open(const ConnectionInfo& connectionInfo) {
-        WindowHandle window = presenter_.create(connectionInfo.initialWindow);
+    inline OpenResult Connection::open(const ConnectionInfo& connectionInfo) {
+        WindowHandle window = displayServer_.create(connectionInfo.pilotWindowInfo);
 
-        device_.connect(presenter_, connectionInfo.deviceRequirements);
+        logicalDevice_.connect(displayServer_, connectionInfo.deviceRequirements);
 
-        return window;
+        return {
+            .pilotWindow = window,
+        };
     }
 
     inline void Connection::close() {
-        presenter_.reset();
-        device_.disconnect();
+        displayServer_.reset();
+        logicalDevice_.disconnect();
     }
 
     inline WindowHandle Connection::createWindow(const WindowInfo& windowInfo) {
-        return presenter_.create(windowInfo);
+        return displayServer_.create(windowInfo);
     }
 
     inline void Connection::destroyWindow(WindowHandle handle) {
-        presenter_.destroy(handle);
+        displayServer_.destroy(handle);
     }
 
     inline WindowAttributes Connection::windowAttributes(WindowHandle handle) const {
-        return presenter_.attributes(handle);
+        return displayServer_.attributes(handle);
     }
 }

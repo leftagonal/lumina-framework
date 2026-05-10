@@ -4,6 +4,8 @@
 #include <lumina/meta/index_table.hpp>
 #include <lumina/meta/pod_type.hpp>
 
+#include <lumina/core/application.hpp>
+
 #include "entity.hpp"
 #include "view.hpp"
 
@@ -14,8 +16,8 @@ namespace lumina::ecs {
         using Allocation = meta::Allocation;
 
     public:
-        Registry() = default;
-        ~Registry() = default;
+        Registry(const core::ApplicationInfo& applicationInfo);
+        ~Registry();
 
         Registry(const Registry&) = default;
         Registry(Registry&&) noexcept = default;
@@ -58,6 +60,8 @@ namespace lumina::ecs {
         std::vector<IndexType> versions_;
         std::vector<IndexType> freeList_;
         std::vector<bool> statuses_;
+
+        bool validation_;
 
         template <meta::PODType T>
         [[nodiscard]] static std::size_t typeIndex();

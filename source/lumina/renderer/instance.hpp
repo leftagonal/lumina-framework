@@ -1,5 +1,7 @@
 #pragma once
 
+#include <lumina/core/application.hpp>
+
 #include "vulkan.hpp"
 
 #include <cstdint>
@@ -7,30 +9,13 @@
 #include <vector>
 
 namespace lumina::renderer {
-    struct Version {
-        std::uint32_t major;
-        std::uint32_t minor;
-        std::uint32_t patch;
-    };
-
-    struct Features {
-        bool validation;
-        bool debugging;
-    };
-
-    struct ApplicationInfo {
-        std::string_view name;
-        Version version;
-        Features features;
-    };
-
     namespace accessors {
         struct InstanceAccessor;
     }
 
     class Instance {
     public:
-        Instance(const ApplicationInfo& info);
+        Instance(const core::ApplicationInfo& info);
         ~Instance();
 
         Instance(const Instance&) = delete;
@@ -39,8 +24,8 @@ namespace lumina::renderer {
         Instance& operator=(const Instance&) = delete;
         Instance& operator=(Instance&&) noexcept = default;
 
-        [[nodiscard]] bool debugging() const {
-            return debugging_;
+        [[nodiscard]] bool validation() const {
+            return validation_;
         }
 
         void update();
@@ -51,11 +36,11 @@ namespace lumina::renderer {
         using Names = std::vector<const char*>;
 
         VkInstance instance_ = nullptr;
-        bool debugging_;
+        bool validation_;
 
         void initialiseSystemAPI() const;
-        void appendRequiredExtensions(const Features& features, Names& requirements) const;
-        void appendRequiredLayers(const Features& features, Names& requirements) const;
+        void appendRequiredExtensions(Names& requirements) const;
+        void appendRequiredLayers(Names& requirements) const;
 
         [[nodiscard]] ExtensionProperties getAvailableExtensions() const;
         [[nodiscard]] LayerProperties getAvailableLayers() const;

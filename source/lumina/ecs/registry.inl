@@ -1,11 +1,20 @@
 #pragma once
 
+#include <lumina/meta/console.hpp>
 #include <lumina/meta/type_index.hpp>
 
 #include "registry.hpp"
 #include "set_functions.hpp"
 
 namespace lumina::ecs {
+    Registry::Registry(const core::ApplicationInfo& applicationInfo)
+        : validation_(applicationInfo.features.validation) {
+    }
+
+    Registry::~Registry() {
+        meta::logDebug(validation_, "{} entity(s) in registry destroyed", versions_.size() - freeList_.size());
+    }
+
     Entity Registry::create() {
         IndexType id;
         IndexType version;
@@ -17,11 +26,14 @@ namespace lumina::ecs {
             freeList_.pop_back();
             statuses_[id] = false;
 
+            meta::logDebug(validation_, "entity created [freelist] (id: {} version: {})", id, version);
         } else {
             id = static_cast<IndexType>(versions_.size());
             version = versions_.emplace_back(0);
 
             statuses_.emplace_back(true);
+
+            meta::logDebug(validation_, "entity created [new] (id: {} version: {})", id, version);
         }
 
         return Entity{id, version};
@@ -50,6 +62,8 @@ namespace lumina::ecs {
         versions_[id]++;
         freeList_.emplace_back(id);
         statuses_[id] = false;
+
+        meta::logDebug(validation_, "entity destroyed (id: {} version: {})", target.id(), target.version());
     }
 
     void Registry::clear() {

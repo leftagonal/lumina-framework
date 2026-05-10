@@ -4,6 +4,6 @@
 #include "framework/standard.hpp"
 
 #include "renderer/connection.inl"
-#include "renderer/device.inl"
+#include "renderer/logical_device.inl"
 #include "renderer/instance.inl"
-#include "renderer/presenter.inl"
+#include "renderer/display_server.inl"
