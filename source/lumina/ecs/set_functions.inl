@@ -3,7 +3,7 @@
 #include "set_functions.hpp"
 
 namespace lumina::ecs {
-    template <meta::PODType T>
+    template <Component T>
     T& SetFunctions::get(Allocation& allocation, const IndexTable& table, IndexType sparse) {
         auto dense = table[sparse];
         auto* target = &allocation[dense];
@@ -11,7 +11,7 @@ namespace lumina::ecs {
         return *reinterpret_cast<T*>(target);
     }
 
-    template <meta::PODType T>
+    template <Component T>
     const T& SetFunctions::get(const Allocation& allocation, const IndexTable& table, IndexType sparse) {
         auto dense = table[sparse];
         auto* target = &allocation[dense];
@@ -19,7 +19,7 @@ namespace lumina::ecs {
         return *reinterpret_cast<const T*>(target);
     }
 
-    template <meta::PODType T, typename... Args>
+    template <Component T, typename... Args>
     T& SetFunctions::insert(Allocation& allocation, IndexTable& table, IndexType sparse, Args&&... args) {
         auto index = allocation.count();
 
