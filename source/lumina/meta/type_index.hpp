@@ -1,15 +1,13 @@
 #pragma once
 
-#include "empty_type.hpp"
+#include <cstddef>
 
 namespace lumina::meta {
-    using TypeIndex = std::size_t;
-
-    template <EmptyType T>
-    inline constexpr bool IsTypeContext = false;
-
     struct ECSTypeContext {};
     struct EventsTypeContext {};
+
+    template <typename T>
+    inline constexpr bool IsTypeContext = false;
 
     template <>
     inline constexpr bool IsTypeContext<ECSTypeContext> = true;
@@ -17,18 +15,19 @@ namespace lumina::meta {
     template <>
     inline constexpr bool IsTypeContext<EventsTypeContext> = true;
 
-    template <EmptyType>
-    [[nodiscard]] inline TypeIndex incrementContext() {
-        static TypeIndex value = 0xFFFFFFFFFFFFFFFFull;
+    template <typename T>
+    concept TypeContext = IsTypeContext<T>;
 
-        return ++value;
-    }
+    template <TypeContext Ctx>
+    struct TypeIndexer final {
+        using ContextType = Ctx;
 
-    template <EmptyType Context, typename>
-    requires(IsTypeContext<Context>)
-    [[nodiscard]] TypeIndex typeIndex() {
-        static const TypeIndex index = incrementContext<Context>();
+        template <typename T>
+        [[nodiscard]] static std::size_t index() {
+            static std::size_t n = Counter++;
+            return n;
+        }
 
-        return index;
-    }
+        inline static std::size_t Counter = 0;
+    };
 }

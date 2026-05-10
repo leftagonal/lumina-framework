@@ -3,7 +3,7 @@
 #include <lumina/ecs/iterator.hpp>
 
 namespace lumina::ecs {
-    template <bool Const, meta::PODType... Ts>
+    template <bool Const, Component... Ts>
     class BasicView final {
         using IndexType = Entity::ValueType;
         using IndexTable = meta::IndexTable<IndexType>;
@@ -67,13 +67,13 @@ namespace lumina::ecs {
 
         [[nodiscard]] std::size_t getDriverIndex() const;
 
-        template <meta::PODType T>
+        template <Component T>
         void smallestOf(std::size_t& current) const;
     };
 
-    template <meta::PODType... Ts>
+    template <Component... Ts>
     using View = BasicView<false, Ts...>;
 
-    template <meta::PODType... Ts>
+    template <Component... Ts>
     using ConstView = BasicView<true, Ts...>;
 }

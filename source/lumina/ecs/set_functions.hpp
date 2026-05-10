@@ -2,9 +2,9 @@
 
 #include <lumina/meta/allocation.hpp>
 #include <lumina/meta/index_table.hpp>
-#include <lumina/meta/pod_type.hpp>
 
 #include "entity.hpp"
+#include "meta.hpp"
 
 namespace lumina::ecs {
     class SetFunctions final {
@@ -15,13 +15,13 @@ namespace lumina::ecs {
     public:
         SetFunctions() = delete;
 
-        template <meta::PODType T>
+        template <Component T>
         [[nodiscard]] static T& get(Allocation& allocation, const IndexTable& table, IndexType sparse);
 
-        template <meta::PODType T>
+        template <Component T>
         [[nodiscard]] static const T& get(const Allocation& allocation, const IndexTable& table, IndexType sparse);
 
-        template <meta::PODType T, typename... Args>
+        template <Component T, typename... Args>
         static T& insert(Allocation& allocation, IndexTable& table, IndexType sparse, Args&&... args);
         static void remove(Allocation& allocation, IndexTable& table, IndexType sparse);
     };

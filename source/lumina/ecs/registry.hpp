@@ -31,26 +31,26 @@ namespace lumina::ecs {
         void destroy(const Entity& target);
         void clear();
 
-        template <meta::PODType T, typename... Args>
+        template <Component T, typename... Args>
         T& emplace(const Entity& target, Args&&... args);
 
-        template <meta::PODType T>
+        template <Component T>
         [[nodiscard]] bool has(const Entity& target) const;
 
-        template <meta::PODType T>
+        template <Component T>
         [[nodiscard]] T& get(const Entity& target);
 
-        template <meta::PODType T>
+        template <Component T>
         [[nodiscard]] const T& get(const Entity& target) const;
 
-        template <meta::PODType T>
+        template <Component T>
         void remove(const Entity& target);
         void removeAll(const Entity& target);
 
-        template <meta::PODType... Ts>
+        template <Component... Ts>
         [[nodiscard]] View<Ts...> view();
 
-        template <meta::PODType... Ts>
+        template <Component... Ts>
         [[nodiscard]] ConstView<Ts...> view() const;
 
     private:
@@ -63,13 +63,10 @@ namespace lumina::ecs {
 
         bool validation_;
 
-        template <meta::PODType T>
-        [[nodiscard]] static std::size_t typeIndex();
-
-        template <meta::PODType T>
+        template <Component T>
         [[nodiscard]] std::size_t acquire();
 
-        template <meta::PODType T>
+        template <Component T>
         [[nodiscard]] bool acquirable() const;
     };
 }

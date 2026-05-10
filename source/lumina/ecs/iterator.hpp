@@ -2,14 +2,13 @@
 
 #include <lumina/meta/allocation.hpp>
 #include <lumina/meta/index_table.hpp>
-#include <lumina/meta/pod_type.hpp>
-#include <lumina/meta/type_index.hpp>
 
 #include "entity.hpp"
+#include "meta.hpp"
 #include "set_functions.hpp"
 
 namespace lumina::ecs {
-    template <bool Const, bool Scanning, bool Expand, meta::PODType... Ts>
+    template <bool Const, bool Scanning, bool Expand, Component... Ts>
     class BasicComponentIterator final {
         using IndexType = Entity::ValueType;
         using IndexTable = meta::IndexTable<IndexType>;
@@ -46,7 +45,7 @@ namespace lumina::ecs {
             using InstanceType = std::conditional_t<Const, const IteratorType, IteratorType>;
             using IndexType = Entity::ValueType;
 
-            template <meta::PODType T>
+            template <Component T>
             using component_type = std::conditional_t<Const, const T, T>;
 
             static Type get(InstanceType& iterator) {
@@ -62,9 +61,9 @@ namespace lumina::ecs {
                 return Type{target, component_of<Ts>(id, iterator)...};
             }
 
-            template <meta::PODType T>
+            template <Component T>
             [[nodiscard]] static component_type<T>& component_of(IndexType id, InstanceType& iterator) {
-                std::size_t index = meta::typeIndex<meta::ECSTypeContext, T>();
+                std::size_t index = typeIndex<T>();
 
                 return SetFunctions::get<T>((*iterator.allocations_)[index], (*iterator.tables_)[index], id);
             }
@@ -131,20 +130,20 @@ namespace lumina::ecs {
         void scanForward();
         void scanBackward();
 
-        template <meta::PODType T>
+        template <Component T>
         [[nodiscard]] bool has(IndexType id);
         [[nodiscard]] bool hasAll(IndexType id);
     };
 
-    template <bool Const, meta::PODType... Ts>
+    template <bool Const, Component... Ts>
     using ComponentIterator = BasicComponentIterator<Const, false, false, Ts...>;
 
-    template <bool Const, meta::PODType... Ts>
+    template <bool Const, Component... Ts>
     using ScanningComponentIterator = BasicComponentIterator<Const, true, false, Ts...>;
 
-    template <bool Const, meta::PODType... Ts>
+    template <bool Const, Component... Ts>
     using ExpandingComponentIterator = BasicComponentIterator<Const, false, true, Ts...>;
 
-    template <bool Const, meta::PODType... Ts>
+    template <bool Const, Component... Ts>
     using ScanningExpandingComponentIterator = BasicComponentIterator<Const, true, true, Ts...>;
 }

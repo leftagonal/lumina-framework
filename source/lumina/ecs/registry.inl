@@ -75,7 +75,7 @@ namespace lumina::ecs {
         statuses_.clear();
     }
 
-    template <meta::PODType T, typename... Args>
+    template <Component T, typename... Args>
     T& Registry::emplace(const Entity& target, Args&&... args) {
         auto index = acquire<T>();
         auto& allocation = allocations_[index];
@@ -84,7 +84,7 @@ namespace lumina::ecs {
         return SetFunctions::insert<T>(allocation, table, target.id(), std::forward<Args>(args)...);
     }
 
-    template <meta::PODType T>
+    template <Component T>
     bool Registry::has(const Entity& target) const {
         if (!acquirable<T>()) {
             return false;
@@ -96,7 +96,7 @@ namespace lumina::ecs {
         return table.contains(target.id());
     }
 
-    template <meta::PODType T>
+    template <Component T>
     T& Registry::get(const Entity& target) {
         auto index = typeIndex<T>();
         auto& allocation = allocations_[index];
@@ -105,7 +105,7 @@ namespace lumina::ecs {
         return SetFunctions::get<T>(allocation, table, target.id());
     }
 
-    template <meta::PODType T>
+    template <Component T>
     const T& Registry::get(const Entity& target) const {
         auto index = typeIndex<T>();
         auto& allocation = allocations_[index];
@@ -114,7 +114,7 @@ namespace lumina::ecs {
         return SetFunctions::get<T>(allocation, table, target.id());
     }
 
-    template <meta::PODType T>
+    template <Component T>
     void Registry::remove(const Entity& target) {
         auto index = typeIndex<T>();
         auto& allocation = allocations_[index];
@@ -152,22 +152,17 @@ namespace lumina::ecs {
         }
     }
 
-    template <meta::PODType... Ts>
+    template <Component... Ts>
     View<Ts...> Registry::view() {
         return View<Ts...>{&indexTables_, &allocations_, &versions_};
     }
 
-    template <meta::PODType... Ts>
+    template <Component... Ts>
     ConstView<Ts...> Registry::view() const {
         return ConstView<Ts...>{&indexTables_, &allocations_, &versions_};
     }
 
-    template <meta::PODType T>
-    std::size_t Registry::typeIndex() {
-        return meta::typeIndex<meta::ECSTypeContext, T>();
-    }
-
-    template <meta::PODType T>
+    template <Component T>
     std::size_t Registry::acquire() {
         auto index = typeIndex<T>();
 
@@ -183,7 +178,7 @@ namespace lumina::ecs {
         return index;
     }
 
-    template <meta::PODType T>
+    template <Component T>
     bool Registry::acquirable() const {
         return typeIndex<T>() < allocations_.size();
     }

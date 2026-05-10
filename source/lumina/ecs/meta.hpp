@@ -3,12 +3,12 @@
 #include <lumina/meta/type_index.hpp>
 #include <lumina/meta/pod_type.hpp>
 
-namespace lumina::events {
+namespace lumina::ecs {
     template <typename T>
-    concept Event = meta::PODType<T>;
+    concept Component = meta::PODType<T>;
 
     template <typename T>
     [[nodiscard]] std::size_t typeIndex() {
-        return meta::TypeIndexer<meta::EventsTypeContext>::index<T>();
+        return meta::TypeIndexer<meta::ECSTypeContext>::index<T>();
     }
 }
