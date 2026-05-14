@@ -66,7 +66,7 @@ namespace lumina::events {
         Stream& operator=(Stream&&) noexcept = default;
 
         template <auto Fn>
-        [[nodiscard]] StreamToken connect() {
+        StreamToken connect() {
             std::size_t index = 0;
 
             if (!freeList_.empty()) {
@@ -83,7 +83,7 @@ namespace lumina::events {
         }
 
         template <auto Fn>
-        [[nodiscard]] StreamToken connect(extraction::InstanceType<Fn>& instance) {
+        StreamToken connect(extraction::InstanceType<Fn>& instance) {
             std::size_t index = 0;
 
             if (!freeList_.empty()) {

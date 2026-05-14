@@ -1,6 +1,7 @@
 #pragma once
 
-#include <vulkan/vulkan.h>
+#include "lumina/core/application.hpp"
+#include "vulkan.hpp"
 
 #include <cstdint>
 #include <vector>
@@ -18,23 +19,30 @@ namespace lumina::renderer {
     };
 
     class Instance;
-    class DisplayServer;
+    class WindowManager;
 
     class LogicalDevice {
     public:
         LogicalDevice() = default;
+        LogicalDevice(WindowManager& windowManager, const DeviceRequirements& requirements);
         ~LogicalDevice();
 
-        void connect(DisplayServer& presenter, const DeviceRequirements& requirements);
-        void disconnect();
+        LogicalDevice(const LogicalDevice&) = delete;
+        LogicalDevice(LogicalDevice&&) noexcept;
 
-        [[nodiscard]] Instance& instance() {
-            return *instance_;
-        }
+        LogicalDevice& operator=(const LogicalDevice&) = delete;
+        LogicalDevice& operator=(LogicalDevice&&) noexcept;
 
-        [[nodiscard]] const Instance& instance() const {
-            return *instance_;
-        }
+        [[nodiscard]] Instance& instance();
+        [[nodiscard]] const Instance& instance() const;
+
+        [[nodiscard]] WindowManager& windowManager();
+        [[nodiscard]] const WindowManager& windowManager() const;
+
+        void destroy();
+
+        [[nodiscard]] bool valid() const;
+        explicit operator bool() const;
 
     private:
         struct QueueFamilySelection {
@@ -54,21 +62,21 @@ namespace lumina::renderer {
         using ExtensionProperties = std::vector<VkExtensionProperties>;
         using Names = std::vector<const char*>;
 
+        Instance* instance_ = nullptr;
+        WindowManager* windowManager_ = nullptr;
         VkPhysicalDevice physicalDevice_ = nullptr;
         VkDevice device_ = nullptr;
-        bool validation_;
-
         VkQueue presentQueue_ = nullptr;
         VkQueue graphicsQueue_ = nullptr;
         VkQueue computeQueue_ = nullptr;
         VkQueue transferQueue_ = nullptr;
 
-        Instance* instance_ = nullptr;
+        [[nodiscard]] bool validation() const;
 
         [[nodiscard]] QueueCreateInfos makeQueueCreateInfos(const QueueFamilySelections& queueSelections) const;
         [[nodiscard]] PhysicalDevices getAvailablePhysicalDevices() const;
         [[nodiscard]] QueueFamilies getAvailableQueueFamilies() const;
-        [[nodiscard]] QueueFamilySelections pickSuitableQueueFamilies(const QueueFamilies& families, DisplayServer& presenter) const;
+        [[nodiscard]] QueueFamilySelections pickSuitableQueueFamilies(const QueueFamilies& families) const;
         [[nodiscard]] ExtensionProperties getAvailableExtensions() const;
         [[nodiscard]] bool testRequirements(const Names& requirements, const ExtensionProperties& available) const;
 

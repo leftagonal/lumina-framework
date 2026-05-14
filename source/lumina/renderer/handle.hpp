@@ -43,6 +43,6 @@ namespace lumina::renderer {
         }
 
     private:
-        std::size_t id_ = 0xFFFFFFFFFFFFFFFFull;
+        std::size_t id_;
     };
 }

@@ -15,28 +15,33 @@ namespace lumina::renderer {
 
     class Instance {
     public:
+        Instance() = default;
         Instance(const core::ApplicationInfo& info);
         ~Instance();
 
         Instance(const Instance&) = delete;
-        Instance(Instance&&) noexcept = default;
+        Instance(Instance&&) noexcept;
 
         Instance& operator=(const Instance&) = delete;
-        Instance& operator=(Instance&&) noexcept = default;
+        Instance& operator=(Instance&&) noexcept;
 
-        [[nodiscard]] bool validation() const {
-            return validation_;
-        }
+        [[nodiscard]] const core::ApplicationInfo& applicationInfo() const;
 
         void update();
+        void destroy();
+
+        [[nodiscard]] bool valid() const;
+        explicit operator bool() const;
 
     private:
         using ExtensionProperties = std::vector<VkExtensionProperties>;
         using LayerProperties = std::vector<VkLayerProperties>;
         using Names = std::vector<const char*>;
 
+        const core::ApplicationInfo* applicationInfo_ = nullptr;
         VkInstance instance_ = nullptr;
-        bool validation_;
+
+        [[nodiscard]] bool validation() const;
 
         void initialiseSystemAPI() const;
         void appendRequiredExtensions(Names& requirements) const;

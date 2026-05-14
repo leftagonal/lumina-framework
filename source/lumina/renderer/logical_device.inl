@@ -1,30 +1,26 @@
 #pragma once
 
-#include "display_server.hpp"
+#include <lumina/meta/console.hpp>
+#include <lumina/meta/exceptions.hpp>
+
 #include "instance.hpp"
 #include "logical_device.hpp"
 #include "vulkan.hpp"
-
-#include <lumina/meta/console.hpp>
-#include <lumina/meta/exceptions.hpp>
+#include "window_manager.hpp"
 
 #include <unordered_map>
 
 namespace lumina::renderer {
-    inline void LogicalDevice::connect(DisplayServer& displayServer, const DeviceRequirements& requirements) {
-        meta::assert(instance_ == nullptr, "device has already been created");
-        meta::assert(displayServer.count() > 0, "minimum one window is required for device creation");
-        meta::assert(!displayServer.bound(), "provided displayServer is already in-use by a different device");
-
-        validation_ = displayServer.instance().validation();
-        instance_ = &displayServer.instance();
+    inline LogicalDevice::LogicalDevice(WindowManager& windowManager, const DeviceRequirements& requirements)
+        : instance_(&windowManager.instance()), windowManager_(&windowManager) {
+        meta::assert(windowManager.count() > 0, "minimum one window is required for device creation");
 
         PhysicalDevices physicalDevices = getAvailablePhysicalDevices();
 
         pickMostSuitablePhysicalDevice(physicalDevices, requirements);
 
         QueueFamilies queueFamilies = getAvailableQueueFamilies();
-        QueueFamilySelections queueSelections = pickSuitableQueueFamilies(queueFamilies, displayServer);
+        QueueFamilySelections queueSelections = pickSuitableQueueFamilies(queueFamilies);
         QueueCreateInfos queueCreateInfos = makeQueueCreateInfos(queueSelections);
 
         Names requiredExtensions = {
@@ -58,35 +54,105 @@ namespace lumina::renderer {
         VkResult result = vkCreateDevice(physicalDevice_, &createInfo, nullptr, &device_);
 
         meta::assert(result == VK_SUCCESS, "logical device creation failed: {}", Vulkan_errorString(result));
-        meta::logDebug(validation_, "Vulkan logical device initialised");
+        meta::logDebug(validation(), "Vulkan logical device initialised");
 
         vkGetDeviceQueue(device_, queueSelections[0].familyIndex, queueSelections[0].queueIndex, &presentQueue_);
         vkGetDeviceQueue(device_, queueSelections[1].familyIndex, queueSelections[1].queueIndex, &graphicsQueue_);
         vkGetDeviceQueue(device_, queueSelections[2].familyIndex, queueSelections[2].queueIndex, &computeQueue_);
         vkGetDeviceQueue(device_, queueSelections[3].familyIndex, queueSelections[3].queueIndex, &transferQueue_);
 
-        meta::logDebug(validation_, "Vulkan queues assigned");
+        meta::logDebug(validation(), "Vulkan queues assigned");
     }
 
-    inline void LogicalDevice::disconnect() {
+    inline LogicalDevice::~LogicalDevice() {
+        destroy();
+    }
+
+    LogicalDevice::LogicalDevice(LogicalDevice&& other) noexcept
+        : instance_(other.instance_), windowManager_(other.windowManager_), physicalDevice_(other.physicalDevice_),
+          device_(other.device_), presentQueue_(other.presentQueue_), graphicsQueue_(other.graphicsQueue_),
+          computeQueue_(other.computeQueue_), transferQueue_(other.transferQueue_) {
+        other.instance_ = nullptr;
+        other.windowManager_ = nullptr;
+        other.physicalDevice_ = nullptr;
+        other.device_ = nullptr;
+        other.presentQueue_ = nullptr;
+        other.graphicsQueue_ = nullptr;
+        other.computeQueue_ = nullptr;
+        other.transferQueue_ = nullptr;
+    }
+
+    LogicalDevice& LogicalDevice::operator=(LogicalDevice&& other) noexcept {
+        if (this == &other) {
+            return *this;
+        }
+
+        instance_ = other.instance_;
+        windowManager_ = other.windowManager_;
+        physicalDevice_ = other.physicalDevice_;
+        device_ = other.device_;
+        presentQueue_ = other.presentQueue_;
+        graphicsQueue_ = other.graphicsQueue_;
+        computeQueue_ = other.computeQueue_;
+        transferQueue_ = other.transferQueue_;
+
+        other.instance_ = nullptr;
+        other.windowManager_ = nullptr;
+        other.physicalDevice_ = nullptr;
+        other.device_ = nullptr;
+        other.presentQueue_ = nullptr;
+        other.graphicsQueue_ = nullptr;
+        other.computeQueue_ = nullptr;
+        other.transferQueue_ = nullptr;
+
+        return *this;
+    }
+
+    inline Instance& LogicalDevice::instance() {
+        return *instance_;
+    }
+
+    inline const Instance& LogicalDevice::instance() const {
+        return *instance_;
+    }
+
+    inline WindowManager& LogicalDevice::windowManager() {
+        return *windowManager_;
+    }
+
+    inline const WindowManager& LogicalDevice::windowManager() const {
+        return *windowManager_;
+    }
+
+    inline void LogicalDevice::destroy() {
         if (device_ == nullptr) {
             return;
         }
 
         vkDestroyDevice(device_, nullptr);
 
+        meta::logDebug(validation(), "Vulkan logical device destroyed");
+
+        instance_ = nullptr;
+        windowManager_ = nullptr;
+        physicalDevice_ = nullptr;
         device_ = nullptr;
         presentQueue_ = nullptr;
         graphicsQueue_ = nullptr;
         computeQueue_ = nullptr;
         transferQueue_ = nullptr;
-        instance_ = nullptr;
-
-        meta::logDebug(validation_, "Vulkan logical device destroyed");
     }
 
-    inline LogicalDevice::~LogicalDevice() {
-        disconnect();
+    inline bool LogicalDevice::valid() const {
+        return device_ != nullptr;
+    }
+
+    inline LogicalDevice::operator bool() const {
+        return valid();
+    }
+
+    inline bool LogicalDevice::validation() const {
+        return instance_->applicationInfo().features.validation;
     }
 
     inline LogicalDevice::PhysicalDevices LogicalDevice::getAvailablePhysicalDevices() const {
@@ -128,14 +194,15 @@ namespace lumina::renderer {
 
         vkGetPhysicalDeviceProperties(physicalDevice_, &properties);
 
-        meta::logDebug(validation_, "Vulkan physical device selected:");
-        meta::logDebugListElement(validation_, 1, "name: {}", properties.deviceName);
-        meta::logDebugListElement(validation_, 1, "device ID: {}", properties.deviceID);
-        meta::logDebugListElement(validation_, 1, "vendor ID: {}", properties.vendorID);
+        meta::logDebug(validation(), "Vulkan physical device selected:");
+        meta::logDebugListElement(validation(), 1, "name: {}", properties.deviceName);
+        meta::logDebugListElement(validation(), 1, "device ID: {}", properties.deviceID);
+        meta::logDebugListElement(validation(), 1, "vendor ID: {}", properties.vendorID);
     }
 
-    inline LogicalDevice::QueueFamilySelections LogicalDevice::pickSuitableQueueFamilies(const QueueFamilies& families, DisplayServer& displayServer) const {
-        VkSurfaceKHR drivingSurface = accessors::DisplayServerAccessor::surface(displayServer, 0);
+    inline LogicalDevice::QueueFamilySelections LogicalDevice::pickSuitableQueueFamilies(const QueueFamilies& families) const {
+        Window& drivingWindow = windowManager_->windows().front();
+        VkSurfaceKHR drivingSurface = accessors::WindowAccessor::surface(drivingWindow);
 
         std::optional<QueueFamilySelection> graphics;
         std::optional<QueueFamilySelection> present;
@@ -193,22 +260,22 @@ namespace lumina::renderer {
         }
 
         if (!compute) {
-            meta::logDebug(validation_, "Vulkan compute queue falling back to graphics queue");
+            meta::logDebug(validation(), "Vulkan compute queue falling back to graphics queue");
 
             compute = graphics;
         }
 
         if (!transfer) {
-            meta::logDebug(validation_, "Vulkan transfer queue falling back to graphics queue");
+            meta::logDebug(validation(), "Vulkan transfer queue falling back to graphics queue");
 
             transfer = graphics;
         }
 
-        meta::logDebug(validation_, "Vulkan queues have been identified:");
-        meta::logDebugListElement(validation_, 1, "present: family {}, index {}", present->familyIndex, present->queueIndex);
-        meta::logDebugListElement(validation_, 1, "graphics: family {}, index {}", graphics->familyIndex, graphics->queueIndex);
-        meta::logDebugListElement(validation_, 1, "compute: family {}, index {}", compute->familyIndex, compute->queueIndex);
-        meta::logDebugListElement(validation_, 1, "transfer: family {}, index {}", transfer->familyIndex, transfer->queueIndex);
+        meta::logDebug(validation(), "Vulkan queues have been identified:");
+        meta::logDebugListElement(validation(), 1, "present: family {}, index {}", present->familyIndex, present->queueIndex);
+        meta::logDebugListElement(validation(), 1, "graphics: family {}, index {}", graphics->familyIndex, graphics->queueIndex);
+        meta::logDebugListElement(validation(), 1, "compute: family {}, index {}", compute->familyIndex, compute->queueIndex);
+        meta::logDebugListElement(validation(), 1, "transfer: family {}, index {}", transfer->familyIndex, transfer->queueIndex);
 
         return {
             present.value(),
@@ -266,18 +333,20 @@ namespace lumina::renderer {
 
     inline void LogicalDevice::tryEnableCompatibility(Names& requirements, const ExtensionProperties& available) const {
         for (auto& extension : available) {
-            if (std::string_view(extension.extensionName) == "VK_KHR_portability_subset") {
-                requirements.emplace_back(extension.extensionName);
-
-                return;
+            if (std::string_view(extension.extensionName) != "VK_KHR_portability_subset") {
+                continue;
             }
+
+            requirements.emplace_back(extension.extensionName);
+
+            return;
         }
     }
 
     inline bool LogicalDevice::testRequirements(const Names& requirements, const ExtensionProperties& available) const {
         bool succeeded = true;
 
-        meta::logDebug(validation_, "required Vulkan device extensions: {}", requirements.size());
+        meta::logDebug(validation(), "required Vulkan device extensions: {}", requirements.size());
 
         for (auto& requirement : requirements) {
             bool found = false;
@@ -286,7 +355,7 @@ namespace lumina::renderer {
                 if (std::string_view(requirement) == candidate.extensionName) {
                     found = true;
 
-                    meta::logDebugListElement(validation_, 1, "{}", requirement);
+                    meta::logDebugListElement(validation(), 1, "{}", requirement);
 
                     break;
                 }

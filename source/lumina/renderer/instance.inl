@@ -9,7 +9,7 @@
 
 namespace lumina::renderer {
     inline Instance::Instance(const core::ApplicationInfo& info)
-        : validation_(info.features.validation) {
+        : applicationInfo_(&info) {
         initialiseSystemAPI();
 
         std::uint32_t driverVersion = getDriverSupportedVersion();
@@ -80,10 +80,42 @@ namespace lumina::renderer {
         VkResult result = vkCreateInstance(&createInfo, nullptr, &instance_);
 
         meta::assert(result == VK_SUCCESS, "Vulkan instance creation failed: {}", Vulkan_errorString(result));
-        meta::logDebug(validation_, "Vulkan instance initialised");
+        meta::logDebug(validation(), "Vulkan instance initialised");
     }
 
     inline Instance::~Instance() {
+        destroy();
+    }
+
+    inline Instance::Instance(Instance&& other) noexcept
+        : applicationInfo_(other.applicationInfo_), instance_(other.instance_) {
+        other.applicationInfo_ = nullptr;
+        other.instance_ = nullptr;
+    }
+
+    inline Instance& Instance::operator=(Instance&& other) noexcept {
+        if (this == &other) {
+            return *this;
+        }
+
+        applicationInfo_ = other.applicationInfo_;
+        instance_ = other.instance_;
+
+        other.applicationInfo_ = nullptr;
+        other.instance_ = nullptr;
+
+        return *this;
+    }
+
+    inline const core::ApplicationInfo& Instance::applicationInfo() const {
+        return *applicationInfo_;
+    }
+
+    inline void Instance::update() {
+        glfwPollEvents();
+    }
+
+    inline void Instance::destroy() {
         if (instance_ == nullptr) {
             return;
         }
@@ -91,13 +123,22 @@ namespace lumina::renderer {
         vkDestroyInstance(instance_, nullptr);
         glfwTerminate();
 
-        instance_ = nullptr;
+        meta::logDebug(validation(), "Vulkan instance destroyed");
 
-        meta::logDebug(validation_, "Vulkan instance destroyed");
+        instance_ = nullptr;
+        applicationInfo_ = nullptr;
     }
 
-    inline void Instance::update() {
-        glfwPollEvents();
+    inline bool Instance::valid() const {
+        return instance_ != nullptr;
+    }
+
+    inline Instance::operator bool() const {
+        return valid();
+    }
+
+    inline bool Instance::validation() const {
+        return applicationInfo_->features.validation;
     }
 
     inline void Instance::initialiseSystemAPI() const {
@@ -145,7 +186,7 @@ namespace lumina::renderer {
 
         const char** windowExtensions = glfwGetRequiredInstanceExtensions(&windowExtensionCount);
 
-         meta::assert(windowExtensions != nullptr, "GLFW provided no requirements instance extensions");
+        meta::assert(windowExtensions != nullptr, "GLFW provided no requirements instance extensions");
 
         requirements.reserve(windowExtensionCount);
 
@@ -171,7 +212,7 @@ namespace lumina::renderer {
     }
 
     inline void Instance::appendRequiredLayers(Names& requirements) const {
-        if (validation_) {
+        if (validation()) {
             requirements.emplace_back("VK_LAYER_KHRONOS_validation");
         }
     }
@@ -179,7 +220,7 @@ namespace lumina::renderer {
     inline bool Instance::testRequirements(const Names& requirements, const ExtensionProperties& available) const {
         bool succeeded = true;
 
-        meta::logDebug(validation_, "required Vulkan instance extensions: {}", requirements.size());
+        meta::logDebug(validation(), "required Vulkan instance extensions: {}", requirements.size());
 
         for (auto& requirement : requirements) {
             bool found = false;
@@ -188,7 +229,7 @@ namespace lumina::renderer {
                 if (std::string_view(requirement) == candidate.extensionName) {
                     found = true;
 
-                    meta::logDebugListElement(validation_, 1, "{}", requirement);
+                    meta::logDebugListElement(validation(), 1, "{}", requirement);
 
                     break;
                 }
@@ -207,7 +248,7 @@ namespace lumina::renderer {
     inline bool Instance::testRequirements(const Names& requirements, const LayerProperties& available) const {
         bool succeeded = true;
 
-        meta::logDebug(validation_, "required Vulkan instance layers: {}", requirements.size());
+        meta::logDebug(validation(), "required Vulkan instance layers: {}", requirements.size());
 
         for (auto& requirement : requirements) {
             bool found = false;
@@ -219,7 +260,7 @@ namespace lumina::renderer {
 
                 found = true;
 
-                meta::logDebugListElement(validation_, 1, "{}", requirement);
+                meta::logDebugListElement(validation(), 1, "{}", requirement);
 
                 break;
             }
@@ -244,7 +285,7 @@ namespace lumina::renderer {
         std::uint32_t minor = VK_API_VERSION_MINOR(supportedVersion);
         std::uint32_t patch = VK_API_VERSION_PATCH(supportedVersion);
 
-        meta::logDebug(validation_, "driver Vulkan version: {}.{}.{}", major, minor, patch);
+        meta::logDebug(validation(), "driver Vulkan version: {}.{}.{}", major, minor, patch);
 
         return supportedVersion;
     }

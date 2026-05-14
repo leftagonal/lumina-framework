@@ -63,6 +63,6 @@ namespace lumina::renderer {
     }
 
     inline void GLFW_errorCallback(int errorCode, const char* description) {
-        meta::criticalFailure("GLFW error {}: {}", GLFW_errorString(errorCode), description);
+        meta::terminate("GLFW error {}: {}", GLFW_errorString(errorCode), description);
     }
 }

@@ -36,6 +36,22 @@ namespace lumina::meta {
     }
 
     /**
+     * @brief Ensures a condition is true, otherwise it terminates the program
+     *
+     * @tparam Args The format argument types.
+     * @param condition The condition to check.
+     * @param message The message format string.
+     * @param args The format arguments.
+     */
+    template <typename... Args>
+    inline void cassert(bool condition, std::format_string<Args...> message, Args&&... args) {
+        if (!condition) {
+            meta::logError(message, std::forward<Args>(args)...);
+            std::exit(1);
+        }
+    }
+
+    /**
      * @brief Logs some error information, then terminates the process.
      *
      * @tparam Args The format argument types.
@@ -43,7 +59,7 @@ namespace lumina::meta {
      * @param args The format arguments.
      */
     template <typename... Args>
-    inline void criticalFailure(std::format_string<Args...> message, Args&&... args) {
+    inline void terminate(std::format_string<Args...> message, Args&&... args) {
         logError(message, std::forward<Args>(args)...);
 
         std::exit(1);

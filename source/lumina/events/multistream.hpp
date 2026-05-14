@@ -19,7 +19,7 @@ namespace lumina::events {
         Multistream& operator=(Multistream&&) noexcept = default;
 
         template <auto Fn>
-        [[nodiscard]] StreamToken connect() {
+        StreamToken connect() {
             using EventType = extraction::EventType<Fn>;
 
             auto& stream = get<EventType>();
@@ -28,7 +28,7 @@ namespace lumina::events {
         }
 
         template <auto Fn>
-        [[nodiscard]] StreamToken connect(extraction::InstanceType<Fn>& instance) {
+        StreamToken connect(extraction::InstanceType<Fn>& instance) {
             using EventType = extraction::EventType<Fn>;
 
             auto& stream = get<EventType>();
