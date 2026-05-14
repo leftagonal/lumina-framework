@@ -4,7 +4,6 @@
 #include <lumina/meta/type_index.hpp>
 
 #include "registry.hpp"
-#include "set_functions.hpp"
 
 namespace lumina::ecs {
     Registry::Registry(const core::ApplicationInfo& applicationInfo)
@@ -16,8 +15,8 @@ namespace lumina::ecs {
     }
 
     Entity Registry::create() {
-        IndexType id;
-        IndexType version;
+        std::size_t id;
+        std::size_t version;
 
         if (!freeList_.empty()) {
             id = freeList_.back();
@@ -28,7 +27,7 @@ namespace lumina::ecs {
 
             meta::logDebug(validation_, "entity created [freelist] (id: {} version: {})", id, version);
         } else {
-            id = static_cast<IndexType>(versions_.size());
+            id = static_cast<std::size_t>(versions_.size());
             version = versions_.emplace_back(0);
 
             statuses_.emplace_back(true);
@@ -67,21 +66,40 @@ namespace lumina::ecs {
     }
 
     void Registry::clear() {
-        allocations_.clear();
+        memoryPools_.clear();
         indexTables_.clear();
+        typeSizes_.clear();
 
         versions_.clear();
         freeList_.clear();
         statuses_.clear();
     }
 
-    template <Component T, typename... Args>
-    T& Registry::emplace(const Entity& target, Args&&... args) {
+    template <Component T>
+    T& Registry::emplace(const Entity& target) {
         auto index = acquire<T>();
-        auto& allocation = allocations_[index];
-        auto& table = indexTables_[index];
+        auto& memoryPool = memoryPools_[index];
+        auto& indexTable = indexTables_[index];
 
-        return SetFunctions::insert<T>(allocation, table, target.id(), std::forward<Args>(args)...);
+        return SparseSet<T>::insert(memoryPool, indexTable, target.id());
+    }
+
+    template <Component T>
+    T& Registry::emplace(const Entity& target, const T& value) {
+        auto index = acquire<T>();
+        auto& memoryPool = memoryPools_[index];
+        auto& indexTable = indexTables_[index];
+
+        return SparseSet<T>::insert(memoryPool, indexTable, target.id(), value);
+    }
+
+    template <Component T>
+    T& Registry::emplace(const Entity& target, T&& value) {
+        auto index = acquire<T>();
+        auto& memoryPool = memoryPools_[index];
+        auto& indexTable = indexTables_[index];
+
+        return SparseSet<T>::insert(memoryPool, indexTable, target.id(), value);
     }
 
     template <Component T>
@@ -91,88 +109,84 @@ namespace lumina::ecs {
         }
 
         auto index = typeIndex<T>();
-        auto& table = indexTables_[index];
+        auto& indexTable = indexTables_[index];
 
-        return table.contains(target.id());
+        return indexTable.contains(target.id());
     }
 
     template <Component T>
     T& Registry::get(const Entity& target) {
         auto index = typeIndex<T>();
-        auto& allocation = allocations_[index];
-        auto& table = indexTables_[index];
+        auto& memoryPool = memoryPools_[index];
+        auto& indexTable = indexTables_[index];
 
-        return SetFunctions::get<T>(allocation, table, target.id());
+        return SparseSet<T>::at(memoryPool, indexTable, target.id());
     }
 
     template <Component T>
     const T& Registry::get(const Entity& target) const {
         auto index = typeIndex<T>();
-        auto& allocation = allocations_[index];
-        auto& table = indexTables_[index];
+        auto& memoryPool = memoryPools_[index];
+        auto& indexTable = indexTables_[index];
 
-        return SetFunctions::get<T>(allocation, table, target.id());
+        return SparseSet<T>::at(memoryPool, indexTable, target.id());
     }
 
     template <Component T>
     void Registry::remove(const Entity& target) {
         auto index = typeIndex<T>();
-        auto& allocation = allocations_[index];
-        auto& table = indexTables_[index];
+        auto& memoryPool = memoryPools_[index];
+        auto& indexTable = indexTables_[index];
 
-        SetFunctions::remove(allocation, table, target.id());
+        SparseSet<T>::remove(memoryPool, indexTable, target.id());
     }
 
     void Registry::removeAll(const Entity& target) {
-        for (std::size_t i = 0; i < allocations_.size(); ++i) {
-            auto& table = indexTables_[i];
+        for (std::size_t i = 0; i < memoryPools_.size(); ++i) {
+            auto& indexTable = indexTables_[i];
 
-            if (!table.contains(target.id())) {
+            if (!indexTable.contains(target.id())) {
                 return;
             }
 
-            auto& allocation = allocations_[i];
-            auto location = table[target.id()];
-            auto stride = allocation.stride();
-            auto size = allocation.size();
+            auto& memoryPool = memoryPools_[i];
+            auto location = indexTable[target.id()];
+            auto stride = typeSizes_[i];
+            auto size = memoryPool.size();
 
             auto destinationOffset = location * stride;
             auto sourceOffset = size - stride;
 
             if (destinationOffset < sourceOffset) {
-                auto* data = allocation.data();
+                auto* data = memoryPool.data();
                 auto* destination = data + destinationOffset;
                 auto* source = data + sourceOffset;
 
                 std::memmove(destination, source, stride);
 
-                allocation.shrink(1);
-                table.remove(target.id());
+                memoryPool.free(stride);
+                indexTable.remove(target.id());
             }
         }
     }
 
     template <Component... Ts>
     View<Ts...> Registry::view() {
-        return View<Ts...>{&indexTables_, &allocations_, &versions_};
-    }
-
-    template <Component... Ts>
-    ConstView<Ts...> Registry::view() const {
-        return ConstView<Ts...>{&indexTables_, &allocations_, &versions_};
+        return View<Ts...>{&indexTables_, &memoryPools_, &versions_};
     }
 
     template <Component T>
     std::size_t Registry::acquire() {
         auto index = typeIndex<T>();
 
-        if (index >= allocations_.size()) {
-            allocations_.resize(std::max(4ul, index * 2));
-            indexTables_.resize(std::max(4ul, index * 2));
+        if (index >= memoryPools_.size()) {
+            memoryPools_.resize(std::max(index + 1, index * 2));
+            indexTables_.resize(std::max(index + 1, index * 2));
+            typeSizes_.resize(std::max(index + 1, index * 2), 0xFFFFFFFFFFFFFFFFull);
         }
 
-        if (!allocations_[index]) {
-            allocations_[index].initialise(sizeof(T));
+        if (typeSizes_[index] == 0xFFFFFFFFFFFFFFFFull) {
+            typeSizes_[index] = sizeof(T);
         }
 
         return index;
@@ -180,6 +194,6 @@ namespace lumina::ecs {
 
     template <Component T>
     bool Registry::acquirable() const {
-        return typeIndex<T>() < allocations_.size();
+        return typeIndex<T>() < memoryPools_.size();
     }
 }

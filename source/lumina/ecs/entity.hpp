@@ -1,18 +1,14 @@
 #pragma once
 
-#include <cstdint>
+#include <cstddef>
 
 namespace lumina::ecs {
     class Entity final {
-        using FullType = std::uint64_t;
-
     public:
-        using ValueType = std::uint32_t;
-
         Entity() = default;
         ~Entity() = default;
 
-        Entity(ValueType id, ValueType version);
+        Entity(std::size_t id, std::size_t version);
 
         Entity(const Entity&) = default;
         Entity(Entity&&) noexcept = default;
@@ -20,8 +16,8 @@ namespace lumina::ecs {
         Entity& operator=(const Entity&) = default;
         Entity& operator=(Entity&&) noexcept = default;
 
-        [[nodiscard]] ValueType id() const;
-        [[nodiscard]] ValueType version() const;
+        [[nodiscard]] std::size_t id() const;
+        [[nodiscard]] std::size_t version() const;
         [[nodiscard]] bool alive() const;
 
         [[nodiscard]] bool operator==(const Entity& other) const;
@@ -30,6 +26,7 @@ namespace lumina::ecs {
         explicit operator bool() const;
 
     private:
-        FullType state_ = 0xFFFFFFFF00000000ull;
+        std::size_t id_;
+        std::size_t version_;
     };
 }

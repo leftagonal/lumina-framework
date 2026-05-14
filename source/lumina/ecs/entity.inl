@@ -3,29 +3,28 @@
 #include "entity.hpp"
 
 namespace lumina::ecs {
-    inline Entity::Entity(ValueType id, ValueType version) {
-        state_ = (state_ & 0x00000000FFFFFFFFull) | static_cast<FullType>(id) << 32;
-        state_ = (state_ & 0xFFFFFFFF00000000ull) | static_cast<FullType>(version);
+    inline Entity::Entity(std::size_t id, std::size_t version)
+        : id_(id), version_(version) {
     }
 
-    [[nodiscard]] inline Entity::ValueType Entity::id() const {
-        return static_cast<ValueType>(state_ >> 32);
+    [[nodiscard]] inline std::size_t Entity::id() const {
+        return id_;
     }
 
-    [[nodiscard]] inline Entity::ValueType Entity::version() const {
-        return static_cast<ValueType>(state_);
+    [[nodiscard]] inline std::size_t Entity::version() const {
+        return version_;
     }
 
     [[nodiscard]] inline bool Entity::alive() const {
-        return id() != 0xFFFFFFFFu;
+        return id_ != 0xFFFFFFFFFFFFFFFFull;
     }
 
     [[nodiscard]] inline bool Entity::operator==(const Entity& other) const {
-        return state_ == other.state_;
+        return id_ == other.id_ && version_ == other.version_;
     }
 
     [[nodiscard]] inline bool Entity::operator!=(const Entity& other) const {
-        return state_ != other.state_;
+        return id_ == other.id_ && version_ == other.version_;
     }
 
     inline Entity::operator bool() const {

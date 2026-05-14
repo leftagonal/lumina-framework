@@ -1,20 +1,13 @@
 #pragma once
 
-#include <lumina/meta/allocation.hpp>
-#include <lumina/meta/index_table.hpp>
-#include <lumina/meta/pod_type.hpp>
-
 #include <lumina/core/application.hpp>
 
+#include "sparse_set.hpp"
 #include "entity.hpp"
 #include "view.hpp"
 
 namespace lumina::ecs {
     class Registry final {
-        using IndexType = Entity::ValueType;
-        using IndexTable = meta::IndexTable<IndexType>;
-        using Allocation = meta::Allocation;
-
     public:
         Registry(const core::ApplicationInfo& applicationInfo);
         ~Registry();
@@ -31,8 +24,14 @@ namespace lumina::ecs {
         void destroy(const Entity& target);
         void clear();
 
-        template <Component T, typename... Args>
-        T& emplace(const Entity& target, Args&&... args);
+        template <Component T>
+        T& emplace(const Entity& target);
+
+        template <Component T>
+        T& emplace(const Entity& target, const T& value);
+
+        template <Component T>
+        T& emplace(const Entity& target, T&& value);
 
         template <Component T>
         [[nodiscard]] bool has(const Entity& target) const;
@@ -50,15 +49,19 @@ namespace lumina::ecs {
         template <Component... Ts>
         [[nodiscard]] View<Ts...> view();
 
-        template <Component... Ts>
-        [[nodiscard]] ConstView<Ts...> view() const;
+        template <Component T>
+        [[nodiscard]] SparseSet<T> sparseSet() {
+            std::size_t index = acquire<T>();
+
+            return {indexTables_[index], memoryPools_[index]};
+        }
 
     private:
-        std::vector<Allocation> allocations_;
+        std::vector<MemoryPool> memoryPools_;
         std::vector<IndexTable> indexTables_;
-
-        std::vector<IndexType> versions_;
-        std::vector<IndexType> freeList_;
+        std::vector<std::size_t> typeSizes_;
+        std::vector<std::size_t> versions_;
+        std::vector<std::size_t> freeList_;
         std::vector<bool> statuses_;
 
         bool validation_;

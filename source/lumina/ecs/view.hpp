@@ -3,66 +3,58 @@
 #include <lumina/ecs/iterator.hpp>
 
 namespace lumina::ecs {
-    template <bool Const, Component... Ts>
-    class BasicView final {
-        using IndexType = Entity::ValueType;
-        using IndexTable = meta::IndexTable<IndexType>;
+    template <Component... Ts>
+    class View final {
         using IndexTables = const std::vector<IndexTable>;
-        using Versions = const std::vector<IndexType>;
-        using Allocations = std::conditional_t<Const, const std::vector<meta::Allocation>, std::vector<meta::Allocation>>;
+        using Versions = const std::vector<std::size_t>;
+        using MemoryPools = std::vector<MemoryPool>;
 
     public:
-        BasicView(IndexTables* tables, Allocations* allocations, Versions* versions);
-
-        class Iterable final {
-            using Iterator = ScanningComponentIterator<Const, Ts...>;
-
+        class ImmediateIterable final {
         public:
-            Iterable(IndexTables* tables, Allocations* allocations, Versions* versions, std::size_t driver_index);
+            using Iterator = ScanningImmediateIterator<Ts...>;
 
-            [[nodiscard]] Iterator begin() requires(!Const);
-            [[nodiscard]] Iterator end() requires(!Const);
-            [[nodiscard]] Iterator begin() const requires(Const);
-            [[nodiscard]] Iterator end() const requires(Const);
+            ImmediateIterable(IndexTables* indexTables, MemoryPools* memoryPools, Versions* versions, std::size_t drivingIndex);
+
+            [[nodiscard]] Iterator begin();
+            [[nodiscard]] Iterator end();
 
         private:
-            IndexTables* tables_;
-            Allocations* allocations_;
+            IndexTables* indexTables_;
+            MemoryPools* memoryPools_;
             Versions* versions_;
-            std::size_t driverIndex_;
+            std::size_t drivingIndex_;
 
             [[nodiscard]] std::size_t maximum() const;
         };
 
         class ExpandedIterable final {
-            using Iterator = ScanningExpandingComponentIterator<Const, Ts...>;
-
         public:
-            ExpandedIterable(IndexTables* tables, Allocations* allocations, Versions* versions, std::size_t driver_index);
+            using Iterator = ScanningExpandingIterator<Ts...>;
 
-            [[nodiscard]] Iterator begin() requires(!Const);
-            [[nodiscard]] Iterator end() requires(!Const);
-            [[nodiscard]] Iterator begin() const requires(Const);
-            [[nodiscard]] Iterator end() const requires(Const);
+            ExpandedIterable(IndexTables* indexTables, MemoryPools* memoryPools, Versions* versions, std::size_t drivingIndex);
+
+            [[nodiscard]] Iterator begin();
+            [[nodiscard]] Iterator end();
 
         private:
-            IndexTables* tables_;
-            Allocations* allocations_;
+            IndexTables* indexTables_;
+            MemoryPools* memoryPools_;
             Versions* versions_;
-            std::size_t driverIndex_;
+            std::size_t drivingIndex_;
 
             [[nodiscard]] std::size_t maximum() const;
         };
 
-        [[nodiscard]] Iterable immediate();
+        View(IndexTables* indexTables, MemoryPools* memoryPools, Versions* versions);
+        ~View() = default;
+
+        [[nodiscard]] ImmediateIterable immediate();
         [[nodiscard]] ExpandedIterable expanded();
 
-        [[nodiscard]] Iterable immediate() const;
-        [[nodiscard]] ExpandedIterable expanded() const;
-
     private:
-        IndexTables* tables_;
-        Allocations* allocations_;
+        IndexTables* indexTables_;
+        MemoryPools* memoryPools_;
         Versions* versions_;
 
         [[nodiscard]] std::size_t getDriverIndex() const;
@@ -70,10 +62,4 @@ namespace lumina::ecs {
         template <Component T>
         void smallestOf(std::size_t& current) const;
     };
-
-    template <Component... Ts>
-    using View = BasicView<false, Ts...>;
-
-    template <Component... Ts>
-    using ConstView = BasicView<true, Ts...>;
 }
