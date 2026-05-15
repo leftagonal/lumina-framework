@@ -1,6 +1,6 @@
 #pragma once
 
-#include <lumina/events/stream.hpp>
+#include <lumina/events/socket.hpp>
 
 #include "glfw.hpp"
 #include "handle.hpp"
@@ -50,17 +50,17 @@ namespace lumina::renderer {
         WindowFocus newFocus;
     };
 
-    using WindowSizeStream = events::Stream<WindowResize>;
-    using WindowStatusStream = events::Stream<WindowStatusChange>;
-    using WindowFocusStream = events::Stream<WindowFocusChange>;
+    using WindowSizeSocket = events::Socket<WindowResize>;
+    using WindowStatusSocket = events::Socket<WindowStatusChange>;
+    using WindowFocusSocket = events::Socket<WindowFocusChange>;
 
     struct WindowInfo {
         std::string_view title;
         Extent2D extent;
         WindowFeatures features;
-        WindowSizeStream* sizeStream;
-        WindowStatusStream* statusStream;
-        WindowFocusStream* focusStream;
+        WindowSizeSocket sizeSocket;
+        WindowStatusSocket statusSocket;
+        WindowFocusSocket focusSocket;
     };
 
     class Instance;
@@ -107,9 +107,9 @@ namespace lumina::renderer {
         };
 
         Instance* instance_ = nullptr;
-        WindowSizeStream* sizeStream_ = nullptr;
-        WindowStatusStream* statusStream_ = nullptr;
-        WindowFocusStream* focusStream_ = nullptr;
+        WindowSizeSocket sizeSocket_;
+        WindowStatusSocket statusSocket_;
+        WindowFocusSocket focusSocket_;
 
         GLFWwindow* window_ = nullptr;
         VkSurfaceKHR surface_ = nullptr;

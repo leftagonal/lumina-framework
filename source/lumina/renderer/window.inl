@@ -7,8 +7,8 @@
 
 namespace lumina::renderer {
     Window::Window(const WindowHandle& handle, Instance& instance, WindowInfo& info)
-        : instance_(&instance), sizeStream_(info.sizeStream), statusStream_(info.statusStream),
-          focusStream_(info.focusStream), handle_(handle) {
+        : instance_(&instance), sizeSocket_(info.sizeSocket), statusSocket_(info.statusSocket),
+          focusSocket_(info.focusSocket), handle_(handle) {
         glfwWindowHint(GLFW_RESIZABLE, info.features.resizable);
 
         state_.current.extent = info.extent;
@@ -44,16 +44,17 @@ namespace lumina::renderer {
     }
 
     Window::Window(Window&& other) noexcept
-        : instance_(other.instance_), sizeStream_(other.sizeStream_), statusStream_(other.statusStream_),
-          focusStream_(other.focusStream_), window_(other.window_), surface_(other.surface_), handle_(other.handle_), state_(other.state_) {
+        : instance_(other.instance_), sizeSocket_(other.sizeSocket_), statusSocket_(other.statusSocket_),
+          focusSocket_(other.focusSocket_), window_(other.window_), surface_(other.surface_), handle_(other.handle_), state_(other.state_) {
         glfwSetWindowUserPointer(window_, this);
 
         other.instance_ = nullptr;
-        other.sizeStream_ = nullptr;
-        other.statusStream_ = nullptr;
-        other.focusStream_ = nullptr;
         other.window_ = nullptr;
         other.surface_ = nullptr;
+
+        other.sizeSocket_.disconnect();
+        other.statusSocket_.disconnect();
+        other.focusSocket_.disconnect();
     }
 
     Window& Window::operator=(Window&& other) noexcept {
@@ -62,9 +63,9 @@ namespace lumina::renderer {
         }
 
         instance_ = other.instance_;
-        sizeStream_ = other.sizeStream_;
-        statusStream_ = other.statusStream_;
-        focusStream_ = other.focusStream_;
+        sizeSocket_ = other.sizeSocket_;
+        statusSocket_ = other.statusSocket_;
+        focusSocket_ = other.focusSocket_;
         window_ = other.window_;
         surface_ = other.surface_;
         handle_ = other.handle_;
@@ -75,9 +76,10 @@ namespace lumina::renderer {
         other.instance_ = nullptr;
         other.window_ = nullptr;
         other.surface_ = nullptr;
-        other.sizeStream_ = nullptr;
-        other.statusStream_ = nullptr;
-        other.focusStream_ = nullptr;
+
+        other.sizeSocket_.disconnect();
+        other.statusSocket_.disconnect();
+        other.focusSocket_.disconnect();
 
         return *this;
     }
@@ -135,9 +137,9 @@ namespace lumina::renderer {
             instance_ = nullptr;
         }
 
-        sizeStream_ = nullptr;
-        statusStream_ = nullptr;
-        focusStream_ = nullptr;
+        sizeSocket_.disconnect();
+        statusSocket_.disconnect();
+        focusSocket_.disconnect();
     }
 
     bool Window::valid() const {
@@ -170,7 +172,7 @@ namespace lumina::renderer {
             static_cast<std::size_t>(height),
         };
 
-        if (!window.sizeStream_) {
+        if (!window.sizeSocket_) {
             return;
         }
 
@@ -180,7 +182,7 @@ namespace lumina::renderer {
             .newExtent = window.state_.current.extent,
         };
 
-        window.sizeStream_->enqueue(event);
+        window.sizeSocket_.get().enqueue(event);
     }
 
     void Window::focusCallback(GLFWwindow* handle, int status) {
@@ -198,7 +200,7 @@ namespace lumina::renderer {
             window.state_.current.focus = WindowFocus::Unfocused;
         }
 
-        if (!window.focusStream_) {
+        if (!window.focusSocket_) {
             return;
         }
 
@@ -208,7 +210,7 @@ namespace lumina::renderer {
             .newFocus = window.state_.current.focus,
         };
 
-        window.focusStream_->enqueue(event);
+        window.focusSocket_.get().enqueue(event);
     }
 
     void Window::iconifyCallback(GLFWwindow* handle, int status) {
@@ -226,7 +228,7 @@ namespace lumina::renderer {
             window.state_.current.status = WindowStatus::Active;
         }
 
-        if (!window.statusStream_) {
+        if (!window.statusSocket_) {
             return;
         }
 
@@ -236,7 +238,7 @@ namespace lumina::renderer {
             .newStatus = window.state_.current.status,
         };
 
-        window.statusStream_->enqueue(event);
+        window.statusSocket_.get().enqueue(event);
     }
 
     void Window::closeCallback(GLFWwindow* handle) {
@@ -249,7 +251,7 @@ namespace lumina::renderer {
         window.state_.previous = window.state_.current;
         window.state_.current.status = WindowStatus::Inactive;
 
-        if (!window.statusStream_) {
+        if (!window.statusSocket_) {
             return;
         }
 
@@ -259,6 +261,6 @@ namespace lumina::renderer {
             .newStatus = window.state_.current.status,
         };
 
-        window.statusStream_->enqueue(event);
+        window.statusSocket_.get().enqueue(event);
     }
 }
