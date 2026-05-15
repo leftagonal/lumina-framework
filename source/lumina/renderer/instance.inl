@@ -4,12 +4,13 @@
 #include "instance.hpp"
 
 #include <lumina/framework/information.hpp>
+
 #include <lumina/meta/console.hpp>
 #include <lumina/meta/exceptions.hpp>
 
 namespace lumina::renderer {
     inline Instance::Instance(const core::ApplicationInfo& info)
-        : applicationInfo_(&info) {
+        : applicationInfo_(info) {
         initialiseSystemAPI();
 
         std::uint32_t driverVersion = getDriverSupportedVersion();
@@ -89,7 +90,7 @@ namespace lumina::renderer {
 
     inline Instance::Instance(Instance&& other) noexcept
         : applicationInfo_(other.applicationInfo_), instance_(other.instance_) {
-        other.applicationInfo_ = nullptr;
+        other.applicationInfo_ = {};
         other.instance_ = nullptr;
     }
 
@@ -101,14 +102,14 @@ namespace lumina::renderer {
         applicationInfo_ = other.applicationInfo_;
         instance_ = other.instance_;
 
-        other.applicationInfo_ = nullptr;
+        other.applicationInfo_ = {};
         other.instance_ = nullptr;
 
         return *this;
     }
 
     inline const core::ApplicationInfo& Instance::applicationInfo() const {
-        return *applicationInfo_;
+        return applicationInfo_;
     }
 
     inline void Instance::update() {
@@ -125,8 +126,8 @@ namespace lumina::renderer {
 
         meta::logDebug(validation(), "Vulkan instance destroyed");
 
+        applicationInfo_ = {};
         instance_ = nullptr;
-        applicationInfo_ = nullptr;
     }
 
     inline bool Instance::valid() const {
@@ -138,7 +139,7 @@ namespace lumina::renderer {
     }
 
     inline bool Instance::validation() const {
-        return applicationInfo_->features.validation;
+        return applicationInfo_.features.validation;
     }
 
     inline void Instance::initialiseSystemAPI() const {

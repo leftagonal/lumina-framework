@@ -1,9 +1,7 @@
 #pragma once
 
-#include "lumina/core/application.hpp"
 #include "vulkan.hpp"
 
-#include <cstdint>
 #include <vector>
 
 namespace lumina::renderer {

@@ -1,16 +1,41 @@
 #pragma once
 
-#include "window_manager.hpp"
 #include "instance.hpp"
-#include <cstdlib>
+#include "window_manager.hpp"
 
 namespace lumina::renderer {
     WindowManager::WindowManager(Instance& instance)
-    	: instance_(&instance) {
+        : instance_(&instance) {
+    }
+
+    WindowManager::WindowManager(WindowManager&& other) noexcept
+        : instance_(other.instance_), windows_(std::move(other.windows_)), freeList_(other.freeList_), aliveCounter_(other.aliveCounter_) {
+        other.instance_ = nullptr;
+        other.windows_.clear();
+        other.freeList_.clear();
+        other.aliveCounter_ = 0;
+    }
+
+    WindowManager& WindowManager::operator=(WindowManager&& other) noexcept {
+        if (this == &other) {
+            return *this;
+        }
+
+        instance_ = other.instance_;
+        windows_ = std::move(other.windows_);
+        freeList_ = other.freeList_;
+        aliveCounter_ = other.aliveCounter_;
+
+        other.instance_ = nullptr;
+        other.windows_.clear();
+        other.freeList_.clear();
+        other.aliveCounter_ = 0;
+
+        return *this;
     }
 
     WindowHandle WindowManager::create(WindowInfo& info) {
-    	WindowHandle handle;
+        WindowHandle handle;
 
         if (freeList_.empty()) {
             handle = windows_.size();
@@ -40,7 +65,7 @@ namespace lumina::renderer {
     }
 
     Instance& WindowManager::instance() {
-    	return *instance_;
+        return *instance_;
     }
 
     const Instance& WindowManager::instance() const {
@@ -48,7 +73,7 @@ namespace lumina::renderer {
     }
 
     Window& WindowManager::get(const WindowHandle& handle) {
-    	return windows_[handle.id()];
+        return windows_[handle.id()];
     }
 
     const Window& WindowManager::get(const WindowHandle& handle) const {
@@ -56,26 +81,28 @@ namespace lumina::renderer {
     }
 
     bool WindowManager::contains(const WindowHandle& handle) const {
-    	return windows_.size() > handle.id() && windows_[handle.id()];
+        return windows_.size() > handle.id() && windows_[handle.id()];
     }
 
     void WindowManager::clear() {
-    	windows_.clear();
+        windows_.clear();
+        freeList_.clear();
+        aliveCounter_ = 0;
     }
 
     std::span<Window> WindowManager::windows() {
-    	return windows_;
+        return windows_;
     }
 
     std::span<const Window> WindowManager::windows() const {
-    	return windows_;
+        return windows_;
     }
 
     std::size_t WindowManager::count() const {
-    	return aliveCounter_;
+        return aliveCounter_;
     }
 
     bool WindowManager::empty() const {
-    	return aliveCounter_ == 0;
+        return aliveCounter_ == 0;
     }
 }

@@ -5,8 +5,6 @@
 #include "glfw.hpp"
 #include "handle.hpp"
 
-#include <string_view>
-
 namespace lumina::renderer {
     struct Extent2D {
         std::size_t width;

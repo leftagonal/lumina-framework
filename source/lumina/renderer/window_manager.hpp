@@ -13,10 +13,10 @@ namespace lumina::renderer {
         ~WindowManager() = default;
 
         WindowManager(const WindowManager&) = delete;
-        WindowManager(WindowManager&&) noexcept = default;
+        WindowManager(WindowManager&&) noexcept;
 
         WindowManager& operator=(const WindowManager&) = delete;
-        WindowManager& operator=(WindowManager&&) noexcept = default;
+        WindowManager& operator=(WindowManager&&) noexcept;
 
         WindowHandle create(WindowInfo& info);
         void destroy(const WindowHandle& handle);

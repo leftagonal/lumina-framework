@@ -26,20 +26,12 @@ namespace lumina::renderer {
             return id_;
         }
 
-        [[nodiscard]] bool valid() const {
-            return id() != 0xFFFFFFFFFFFFFFFFull;
-        }
-
         [[nodiscard]] bool operator==(const Handle& other) const {
             return id_ == other.id_;
         }
 
         [[nodiscard]] bool operator!=(const Handle& other) const {
             return id_ != other.id_;
-        }
-
-        explicit operator bool() const {
-            return valid();
         }
 
     private:

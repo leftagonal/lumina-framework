@@ -4,8 +4,6 @@
 
 #include "vulkan.hpp"
 
-#include <cstdint>
-#include <string_view>
 #include <vector>
 
 namespace lumina::renderer {
@@ -38,7 +36,7 @@ namespace lumina::renderer {
         using LayerProperties = std::vector<VkLayerProperties>;
         using Names = std::vector<const char*>;
 
-        const core::ApplicationInfo* applicationInfo_ = nullptr;
+        core::ApplicationInfo applicationInfo_;
         VkInstance instance_ = nullptr;
 
         [[nodiscard]] bool validation() const;

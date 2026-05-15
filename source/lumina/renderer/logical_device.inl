@@ -1,11 +1,9 @@
 #pragma once
 
-#include <lumina/meta/console.hpp>
 #include <lumina/meta/exceptions.hpp>
 
 #include "instance.hpp"
 #include "logical_device.hpp"
-#include "vulkan.hpp"
 #include "window_manager.hpp"
 
 #include <unordered_map>

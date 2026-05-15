@@ -3,7 +3,6 @@
 #include <lumina/meta/exceptions.hpp>
 
 #include "instance.hpp"
-#include "vulkan.hpp"
 #include "window.hpp"
 
 namespace lumina::renderer {
@@ -46,15 +45,15 @@ namespace lumina::renderer {
 
     Window::Window(Window&& other) noexcept
         : instance_(other.instance_), sizeStream_(other.sizeStream_), statusStream_(other.statusStream_),
-          focusStream_(other.focusStream_), window_(other.window_), surface_(other.surface_), state_(other.state_) {
+          focusStream_(other.focusStream_), window_(other.window_), surface_(other.surface_), handle_(other.handle_), state_(other.state_) {
         glfwSetWindowUserPointer(window_, this);
 
         other.instance_ = nullptr;
-        other.window_ = nullptr;
-        other.surface_ = nullptr;
         other.sizeStream_ = nullptr;
         other.statusStream_ = nullptr;
         other.focusStream_ = nullptr;
+        other.window_ = nullptr;
+        other.surface_ = nullptr;
     }
 
     Window& Window::operator=(Window&& other) noexcept {
@@ -68,6 +67,7 @@ namespace lumina::renderer {
         focusStream_ = other.focusStream_;
         window_ = other.window_;
         surface_ = other.surface_;
+        handle_ = other.handle_;
         state_ = other.state_;
 
         glfwSetWindowUserPointer(window_, this);
