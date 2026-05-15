@@ -3,6 +3,7 @@
 #include <lumina/meta/exceptions.hpp>
 
 #include <cstddef>
+#include <cstring>
 #include <vector>
 
 namespace lumina::ecs {
