@@ -1,5 +1,6 @@
 #pragma once
 
+#include "queue.hpp"
 #include "surface_manager.hpp"
 
 namespace lumina::renderer {
@@ -15,6 +16,10 @@ namespace lumina::renderer {
     };
 
     class Instance;
+
+    namespace accessors {
+        class LogicalDeviceAccessor;
+    }
 
     class LogicalDevice {
     public:
@@ -40,12 +45,18 @@ namespace lumina::renderer {
         [[nodiscard]] bool valid() const;
 
     private:
-        struct QueueFamilySelection {
-            std::uint32_t familyIndex = 0;
-            std::uint32_t queueIndex = 0;
+        struct QueueEntry {
+            QueueFamilySelection selection;
+            QueueFamilyDefinition definition;
         };
 
-        using QueueFamilySelections = std::array<QueueFamilySelection, 4>;
+        struct QueueSelection {
+            QueueEntry entry;
+            QueueIntent intent;
+            bool fallback;
+        };
+
+        using QueueSelections = std::vector<QueueSelection>;
 
         struct QueueCreateInfos {
             std::vector<VkDeviceQueueCreateInfo> createInfos;
@@ -62,21 +73,94 @@ namespace lumina::renderer {
         VkPhysicalDevice physicalDevice_ = nullptr;
         VkDevice device_ = nullptr;
 
-        VkQueue presentQueue_ = nullptr;
-        VkQueue graphicsQueue_ = nullptr;
-        VkQueue computeQueue_ = nullptr;
-        VkQueue transferQueue_ = nullptr;
+        std::vector<QueueEntry> presentQueues_;
+        std::vector<QueueEntry> graphicsQueues_;
+        std::vector<QueueEntry> computeQueues_;
+        std::vector<QueueEntry> transferQueues_;
 
         [[nodiscard]] bool validation() const;
 
-        [[nodiscard]] QueueCreateInfos makeQueueCreateInfos(const QueueFamilySelections& queueSelections) const;
+        [[nodiscard]] QueueCreateInfos makeQueueCreateInfos(const QueueSelections& queueSelections) const;
         [[nodiscard]] PhysicalDevices getAvailablePhysicalDevices() const;
         [[nodiscard]] QueueFamilies getAvailableQueueFamilies() const;
-        [[nodiscard]] QueueFamilySelections pickSuitableQueueFamilies(const QueueFamilies& families, SurfaceManager& surfaceManager) const;
+        [[nodiscard]] QueueSelections pickSuitableQueueFamilies(const QueueFamilies& families, SurfaceManager& surfaceManager) const;
         [[nodiscard]] ExtensionProperties getAvailableExtensions() const;
         [[nodiscard]] bool testRequirements(const Names& requirements, const ExtensionProperties& available) const;
 
         void pickMostSuitablePhysicalDevice(const PhysicalDevices& physicalDevices, const DeviceRequirements& deviceRequirements);
         void tryEnableCompatibility(Names& required, const ExtensionProperties& available) const;
+
+        friend class accessors::LogicalDeviceAccessor;
     };
+
+    namespace accessors {
+        class LogicalDeviceAccessor {
+        public:
+            LogicalDeviceAccessor() = delete;
+
+            [[nodiscard]] static VkDevice& device(LogicalDevice& logicalDevice) {
+                return logicalDevice.device_;
+            }
+
+            [[nodiscard]] static const VkDevice& device(const LogicalDevice& logicalDevice) {
+                return logicalDevice.device_;
+            }
+
+            [[nodiscard]] static VkPhysicalDevice& physicalDevice(LogicalDevice& logicalDevice) {
+                return logicalDevice.physicalDevice_;
+            }
+
+            [[nodiscard]] static const VkPhysicalDevice& physicalDevice(const LogicalDevice& logicalDevice) {
+                return logicalDevice.physicalDevice_;
+            }
+
+            [[nodiscard]] static LogicalDevice::QueueEntry queueEntry(const LogicalDevice& logicalDevice, QueueIntent intent, std::size_t index) {
+                auto getQueueEntry = [&](const std::vector<LogicalDevice::QueueEntry>& options) {
+                    return options[index];
+                };
+
+                switch (intent) {
+                    case QueueIntent::Present: {
+                        return getQueueEntry(logicalDevice.presentQueues_);
+                    }
+                    case QueueIntent::Graphics: {
+                        return getQueueEntry(logicalDevice.graphicsQueues_);
+                    }
+                    case QueueIntent::Compute: {
+                        return getQueueEntry(logicalDevice.computeQueues_);
+                    }
+                    case QueueIntent::Transfer: {
+                        return getQueueEntry(logicalDevice.transferQueues_);
+                    }
+                }
+            }
+
+            [[nodiscard]] static VkQueue queue(const LogicalDevice& logicalDevice, QueueIntent intent, std::size_t index) {
+                auto getQueue = [&](const std::vector<LogicalDevice::QueueEntry>& options) {
+                    auto& entry = options[index];
+
+                    VkQueue queue = nullptr;
+
+                    vkGetDeviceQueue(logicalDevice.device_, entry.selection.familyIndex, entry.selection.queueIndex, &queue);
+
+                    return queue;
+                };
+
+                switch (intent) {
+                    case QueueIntent::Present: {
+                        return getQueue(logicalDevice.presentQueues_);
+                    }
+                    case QueueIntent::Graphics: {
+                        return getQueue(logicalDevice.graphicsQueues_);
+                    }
+                    case QueueIntent::Compute: {
+                        return getQueue(logicalDevice.computeQueues_);
+                    }
+                    case QueueIntent::Transfer: {
+                        return getQueue(logicalDevice.transferQueues_);
+                    }
+                }
+            }
+        };
+    }
 }

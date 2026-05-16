@@ -18,15 +18,16 @@ namespace lumina::renderer {
 
     LogicalDevice::LogicalDevice(LogicalDevice&& other) noexcept
         : instance_(other.instance_), physicalDevice_(other.physicalDevice_),
-          device_(other.device_), presentQueue_(other.presentQueue_), graphicsQueue_(other.graphicsQueue_),
-          computeQueue_(other.computeQueue_), transferQueue_(other.transferQueue_) {
+          device_(other.device_), presentQueues_(std::move(other.presentQueues_)), graphicsQueues_(std::move(other.graphicsQueues_)),
+          computeQueues_(std::move(other.computeQueues_)), transferQueues_(std::move(other.transferQueues_)) {
         other.instance_ = nullptr;
         other.physicalDevice_ = nullptr;
         other.device_ = nullptr;
-        other.presentQueue_ = nullptr;
-        other.graphicsQueue_ = nullptr;
-        other.computeQueue_ = nullptr;
-        other.transferQueue_ = nullptr;
+
+        other.presentQueues_.clear();
+        other.graphicsQueues_.clear();
+        other.computeQueues_.clear();
+        other.transferQueues_.clear();
     }
 
     LogicalDevice& LogicalDevice::operator=(LogicalDevice&& other) noexcept {
@@ -37,18 +38,20 @@ namespace lumina::renderer {
         instance_ = other.instance_;
         physicalDevice_ = other.physicalDevice_;
         device_ = other.device_;
-        presentQueue_ = other.presentQueue_;
-        graphicsQueue_ = other.graphicsQueue_;
-        computeQueue_ = other.computeQueue_;
-        transferQueue_ = other.transferQueue_;
+
+        presentQueues_ = std::move(other.presentQueues_);
+        graphicsQueues_ = std::move(other.graphicsQueues_);
+        computeQueues_ = std::move(other.computeQueues_);
+        transferQueues_ = std::move(other.transferQueues_);
 
         other.instance_ = nullptr;
         other.physicalDevice_ = nullptr;
         other.device_ = nullptr;
-        other.presentQueue_ = nullptr;
-        other.graphicsQueue_ = nullptr;
-        other.computeQueue_ = nullptr;
-        other.transferQueue_ = nullptr;
+
+        other.presentQueues_.clear();
+        other.graphicsQueues_.clear();
+        other.computeQueues_.clear();
+        other.transferQueues_.clear();
 
         return *this;
     }
@@ -67,7 +70,7 @@ namespace lumina::renderer {
         pickMostSuitablePhysicalDevice(physicalDevices, requirements);
 
         QueueFamilies queueFamilies = getAvailableQueueFamilies();
-        QueueFamilySelections queueSelections = pickSuitableQueueFamilies(queueFamilies, surfaceManager);
+        QueueSelections queueSelections = pickSuitableQueueFamilies(queueFamilies, surfaceManager);
         QueueCreateInfos queueCreateInfos = makeQueueCreateInfos(queueSelections);
 
         Names requiredExtensions = {
@@ -103,12 +106,30 @@ namespace lumina::renderer {
         meta::assert(result == VK_SUCCESS, "logical device creation failed: {}", core::Vulkan_errorString(result));
         meta::logDebug(validation(), "Vulkan logical device initialised");
 
-        vkGetDeviceQueue(device_, queueSelections[0].familyIndex, queueSelections[0].queueIndex, &presentQueue_);
-        vkGetDeviceQueue(device_, queueSelections[1].familyIndex, queueSelections[1].queueIndex, &graphicsQueue_);
-        vkGetDeviceQueue(device_, queueSelections[2].familyIndex, queueSelections[2].queueIndex, &computeQueue_);
-        vkGetDeviceQueue(device_, queueSelections[3].familyIndex, queueSelections[3].queueIndex, &transferQueue_);
+        for (auto& selection : queueSelections) {
+            switch (selection.intent) {
+                case QueueIntent::Present: {
+                    presentQueues_.emplace_back(selection.entry);
 
-        meta::logDebug(validation(), "Vulkan queues assigned");
+                    break;
+                }
+                case QueueIntent::Graphics: {
+                    graphicsQueues_.emplace_back(selection.entry);
+
+                    break;
+                }
+                case QueueIntent::Compute: {
+                    computeQueues_.emplace_back(selection.entry);
+
+                    break;
+                }
+                case QueueIntent::Transfer: {
+                    transferQueues_.emplace_back(selection.entry);
+
+                    break;
+                }
+            }
+        }
     }
 
     inline Instance& LogicalDevice::instance() {
@@ -131,10 +152,11 @@ namespace lumina::renderer {
         instance_ = nullptr;
         physicalDevice_ = nullptr;
         device_ = nullptr;
-        presentQueue_ = nullptr;
-        graphicsQueue_ = nullptr;
-        computeQueue_ = nullptr;
-        transferQueue_ = nullptr;
+
+        presentQueues_.clear();
+        graphicsQueues_.clear();
+        computeQueues_.clear();
+        transferQueues_.clear();
     }
 
     inline bool LogicalDevice::valid() const {
@@ -194,7 +216,7 @@ namespace lumina::renderer {
         meta::logDebugListElement(validation(), 1, "vendor ID: {}", properties.vendorID);
     }
 
-    inline LogicalDevice::QueueFamilySelections LogicalDevice::pickSuitableQueueFamilies(const QueueFamilies& families, SurfaceManager& surfaceManager) const {
+    inline auto LogicalDevice::pickSuitableQueueFamilies(const QueueFamilies& families, SurfaceManager& surfaceManager) const -> QueueSelections {
         VkSurfaceKHR drivingSurface = accessors::SurfaceManagerAccessor::firstValidSurface(surfaceManager);
 
         std::optional<QueueFamilySelection> graphics;
@@ -252,16 +274,22 @@ namespace lumina::renderer {
             }
         }
 
+        bool computeFallback = false;
+
         if (!compute) {
             meta::logDebug(validation(), "Vulkan compute queue falling back to graphics queue");
 
             compute = graphics;
+            computeFallback = true;
         }
+
+        bool transferFallback = false;
 
         if (!transfer) {
             meta::logDebug(validation(), "Vulkan transfer queue falling back to graphics queue");
 
             transfer = graphics;
+            transferFallback = true;
         }
 
         meta::logDebug(validation(), "Vulkan queues have been identified:");
@@ -271,28 +299,74 @@ namespace lumina::renderer {
         meta::logDebugListElement(validation(), 1, "transfer: family {}, index {}", transfer->familyIndex, transfer->queueIndex);
 
         return {
-            present.value(),
-            graphics.value(),
-            compute.value(),
-            transfer.value(),
+            QueueSelection{
+                .entry = {
+                    .selection = present.value(),
+                    .definition = {
+                        .familyIndex = present->familyIndex,
+                        .queueCount = families[present->familyIndex].queueCount,
+                    },
+                },
+                .intent = QueueIntent::Present,
+                .fallback = true,
+            },
+            QueueSelection{
+                .entry = {
+                    .selection = graphics.value(),
+                    .definition = {
+                        .familyIndex = graphics->familyIndex,
+                        .queueCount = families[graphics->familyIndex].queueCount,
+                    },
+                },
+                .intent = QueueIntent::Graphics,
+                .fallback = true,
+            },
+            QueueSelection{
+                .entry = {
+                    .selection = compute.value(),
+                    .definition = {
+                        .familyIndex = compute->familyIndex,
+                        .queueCount = families[compute->familyIndex].queueCount,
+                    },
+                },
+                .intent = QueueIntent::Compute,
+                .fallback = computeFallback,
+            },
+            QueueSelection{
+                .entry = {
+                    .selection = transfer.value(),
+                    .definition = {
+                        .familyIndex = transfer->familyIndex,
+                        .queueCount = families[transfer->familyIndex].queueCount,
+                    },
+                },
+                .intent = QueueIntent::Transfer,
+                .fallback = transferFallback,
+            },
         };
     }
 
-    inline LogicalDevice::QueueCreateInfos LogicalDevice::makeQueueCreateInfos(const QueueFamilySelections& queueSelections) const {
+    inline LogicalDevice::QueueCreateInfos LogicalDevice::makeQueueCreateInfos(const QueueSelections& queueSelections) const {
         QueueCreateInfos queueCreateInfos;
 
         std::unordered_map<std::uint32_t, VkDeviceQueueCreateInfo> queueCreateInfoMap;
 
         for (auto& selection : queueSelections) {
-            if (queueCreateInfoMap.contains(selection.familyIndex)) {
+            if (queueCreateInfoMap.contains(selection.entry.definition.familyIndex)) {
+                // Check if this queue is actually independent
+                // If so, we must increase the number of queues in this family
+                if (!selection.fallback) {
+                    ++queueCreateInfoMap[selection.entry.definition.familyIndex].queueCount;
+                }
+
                 continue;
             }
 
-            queueCreateInfoMap[selection.familyIndex] = {
+            queueCreateInfoMap[selection.entry.definition.familyIndex] = {
                 .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
                 .pNext = nullptr,
                 .flags = 0,
-                .queueFamilyIndex = selection.familyIndex,
+                .queueFamilyIndex = selection.entry.definition.familyIndex,
                 .queueCount = 1,
                 .pQueuePriorities = nullptr,
             };
