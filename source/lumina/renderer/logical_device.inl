@@ -217,7 +217,19 @@ namespace lumina::renderer {
     }
 
     inline auto LogicalDevice::pickSuitableQueueFamilies(const QueueFamilies& families, SurfaceManager& surfaceManager) const -> QueueSelections {
-        VkSurfaceKHR drivingSurface = accessors::SurfaceManagerAccessor::firstValidSurface(surfaceManager);
+        auto& surfaces = surfaceManager.surfaces();
+
+        VkSurfaceKHR drivingSurface = nullptr;
+
+        for (auto& surface : surfaces) {
+            if (!surface) {
+                continue;
+            }
+
+            drivingSurface = accessors::SurfaceAccessor::surface(surface);
+
+            break;
+        }
 
         std::optional<QueueFamilySelection> graphics;
         std::optional<QueueFamilySelection> present;

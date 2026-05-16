@@ -57,7 +57,7 @@ namespace lumina::system {
             }
 
             if (sockets_.destroySocket) {
-                sockets_.destroySocket->attempt({i});
+                sockets_.destroySocket->trigger({i});
             }
 
             window.destroy();
@@ -87,7 +87,7 @@ namespace lumina::system {
         }
 
         if (sockets_.createSocket) {
-            sockets_.createSocket->attempt({handle});
+            sockets_.createSocket->trigger({handle});
         }
 
         return handle;
@@ -99,7 +99,7 @@ namespace lumina::system {
         }
 
         if (sockets_.destroySocket) {
-            sockets_.destroySocket->attempt({handle});
+            sockets_.destroySocket->trigger({handle});
         }
 
         windows_[handle.id()].destroy();

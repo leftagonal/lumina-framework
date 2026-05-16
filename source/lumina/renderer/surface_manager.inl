@@ -60,8 +60,6 @@ namespace lumina::renderer {
             return;
         }
 
-        destroyAll();
-
         auto sockets = windowManager_->sockets();
 
         sockets.createSocket->disconnect(createToken_);
@@ -80,41 +78,32 @@ namespace lumina::renderer {
         return windowManager_->empty();
     }
 
+    std::vector<Surface>& SurfaceManager::surfaces() {
+        return surfaces_;
+    }
+
+    const std::vector<Surface>& SurfaceManager::surfaces() const {
+        return surfaces_;
+    }
+
     void SurfaceManager::createAll() {
         auto& windows = windowManager_->windows();
 
-        surfaces_.resize(windows.size(), nullptr);
+        surfaces_.resize(windows.size());
 
-        for (auto& window : windows) {
-            auto windowHandle = system::accessors::WindowAccessor::window(window);
-            auto instanceHandle = accessors::InstanceAccessor::instance(*instance_);
+        for (std::size_t i = 0; i < surfaces_.size(); ++i) {
+            auto& window = windows[i];
 
-            auto id = window.handle().id();
-            auto& surface = surfaces_[id];
+            if (!window) {
+                continue;
+            }
 
-            VkResult result = glfwCreateWindowSurface(instanceHandle, windowHandle, nullptr, &surface);
-
-            meta::assert(result == VK_SUCCESS, "failed to create Vulkan window surface: {}", core::Vulkan_errorString(result));
+            surfaces_[i].create(*instance_, *windowManager_, window.handle());
         }
-    }
-
-    void SurfaceManager::destroyAll() {
-        auto instanceHandle = accessors::InstanceAccessor::instance(*instance_);
-
-        for (auto& surface : surfaces_) {
-            vkDestroySurfaceKHR(instanceHandle, surface, nullptr);
-
-            surface = nullptr;
-        }
-
-        surfaces_.clear();
     }
 
     void SurfaceManager::onWindowCreate(const system::WindowManagerWindowCreateEvent& event) {
         auto& window = windowManager_->get(event.handle.id());
-
-        auto windowHandle = system::accessors::WindowAccessor::window(window);
-        auto instanceHandle = accessors::InstanceAccessor::instance(*instance_);
 
         if (surfaces_.size() <= event.handle.id()) {
             surfaces_.resize(event.handle.id() + 1);
@@ -122,13 +111,11 @@ namespace lumina::renderer {
 
         auto& surface = surfaces_[event.handle.id()];
 
-        if (surface != nullptr) {
+        if (surface) {
             return;
         }
 
-        VkResult result = glfwCreateWindowSurface(instanceHandle, windowHandle, nullptr, &surface);
-
-        meta::assert(result == VK_SUCCESS, "failed to create Vulkan window surface: {}", core::Vulkan_errorString(result));
+        surface.create(*instance_, *windowManager_, window.handle());
     }
 
     void SurfaceManager::onWindowDestroy(const system::WindowManagerWindowDestroyEvent& event) {
@@ -138,14 +125,10 @@ namespace lumina::renderer {
 
         auto& surface = surfaces_[event.handle.id()];
 
-        if (surface == nullptr) {
+        if (!surface) {
             return;
         }
 
-        auto instanceHandle = accessors::InstanceAccessor::instance(*instance_);
-
-        vkDestroySurfaceKHR(instanceHandle, surface, nullptr);
-
-        surface = nullptr;
+        surface.destroy();
     }
 }

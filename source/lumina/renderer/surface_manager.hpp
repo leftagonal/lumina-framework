@@ -1,6 +1,6 @@
 #pragma once
 
-#include <lumina/system/window_manager.hpp>
+#include "surface.hpp"
 
 namespace lumina::renderer {
     class Instance;
@@ -30,6 +30,9 @@ namespace lumina::renderer {
         [[nodiscard]] bool valid() const;
         [[nodiscard]] bool empty() const;
 
+        [[nodiscard]] std::vector<Surface>& surfaces();
+        [[nodiscard]] const std::vector<Surface>& surfaces() const;
+
     private:
         Instance* instance_ = nullptr;
         system::WindowManager* windowManager_ = nullptr;
@@ -37,7 +40,7 @@ namespace lumina::renderer {
         events::Token createToken_;
         events::Token destroyToken_;
 
-        std::vector<VkSurfaceKHR> surfaces_;
+        std::vector<Surface> surfaces_;
 
         void createAll();
         void destroyAll();
@@ -47,29 +50,4 @@ namespace lumina::renderer {
 
         friend class accessors::SurfaceManagerAccessor;
     };
-
-    namespace accessors {
-        class SurfaceManagerAccessor {
-        public:
-            SurfaceManagerAccessor() = delete;
-
-            [[nodiscard]] static VkSurfaceKHR firstValidSurface(const SurfaceManager& surfaceManager) {
-                for (auto& surface : surfaceManager.surfaces_) {
-                    if (surface != nullptr) {
-                        return surface;
-                    }
-                }
-
-                return nullptr;
-            }
-
-            [[nodiscard]] static VkSurfaceKHR& surface(SurfaceManager& surfaceManager, system::WindowHandle handle) {
-                return surfaceManager.surfaces_[handle.id()];
-            }
-
-            [[nodiscard]] static const VkSurfaceKHR& surface(const SurfaceManager& surfaceManager, system::WindowHandle handle) {
-                return surfaceManager.surfaces_[handle.id()];
-            }
-        };
-    }
 }

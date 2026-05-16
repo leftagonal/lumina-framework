@@ -6,4 +6,5 @@
 #include "renderer/instance.inl"
 #include "renderer/logical_device.inl"
 #include "renderer/queue.inl"
+#include "renderer/surface.inl"
 #include "renderer/surface_manager.inl"

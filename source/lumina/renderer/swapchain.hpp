@@ -3,22 +3,20 @@
 #include "surface_manager.hpp"
 
 namespace lumina::renderer {
-    /// @brief The mode of presentation a given swapchain is to use.
-    enum class PresentMode {
-        /// @brief Immediately displays the frame
-        Immediate,
-
-        /// @brief Waits for the next v-blank.
-        Synchronous,
-
-        /// @brief Overwrites the oldest, presents the newest on v-blank.
-        Asynchronous,
-
-        /// @brief Waits for the next v-blank, allows late submissions.
-        Semisynchonous,
-    };
 
     class LogicalDevice;
+
+    struct SwapchainInfo {
+        SurfacePresentMode presentMode;
+        SurfaceFormat format;
+        SurfaceColourSpace colourSpace;
+        std::size_t minimumImageCount;
+        std::size_t minimumFramesInFlight;
+    };
+
+    namespace accessors {
+        class SwapchainAccessor;
+    };
 
     class Swapchain final {
     public:
@@ -37,7 +35,29 @@ namespace lumina::renderer {
         [[nodiscard]] LogicalDevice& device();
         [[nodiscard]] const LogicalDevice& device() const;
 
+        [[nodiscard]] system::WindowHandle windowHandle() const;
+
     private:
+        LogicalDevice* logicalDevice_ = nullptr;
+
         VkSwapchainKHR swapchain_ = nullptr;
+        system::WindowHandle windowHandle_;
+
+        friend class accessors::SwapchainAccessor;
     };
+
+    namespace accessors {
+        class SwapchainAccessor {
+        public:
+            SwapchainAccessor() = delete;
+
+            [[nodiscard]] static VkSwapchainKHR& swapchain(Swapchain& swapchain) {
+                return swapchain.swapchain_;
+            }
+
+            [[nodiscard]] static const VkSwapchainKHR& swapchain(const Swapchain& swapchain) {
+                return swapchain.swapchain_;
+            }
+        };
+    }
 }
