@@ -1,17 +1,51 @@
 #pragma once
 
-#include "glfw.hpp"
-#include "instance.hpp"
-
+#include <lumina/core/glfw.hpp>
 #include <lumina/framework/information.hpp>
-
 #include <lumina/meta/console.hpp>
 #include <lumina/meta/exceptions.hpp>
 
+#include "instance.hpp"
+
 namespace lumina::renderer {
-    inline Instance::Instance(const core::ApplicationInfo& info)
-        : applicationInfo_(info) {
-        initialiseSystemAPI();
+    inline Instance::Instance(const core::ApplicationInfo& info) {
+        create(info);
+    }
+
+    inline Instance::~Instance() {
+        destroy();
+    }
+
+    inline Instance::Instance(Instance&& other) noexcept
+        : applicationInfo_(other.applicationInfo_), instance_(other.instance_) {
+        other.applicationInfo_ = {};
+        other.instance_ = nullptr;
+    }
+
+    inline Instance& Instance::operator=(Instance&& other) noexcept {
+        if (this == &other) {
+            return *this;
+        }
+
+        applicationInfo_ = other.applicationInfo_;
+        instance_ = other.instance_;
+
+        other.applicationInfo_ = {};
+        other.instance_ = nullptr;
+
+        return *this;
+    }
+
+    inline Instance::operator bool() const {
+        return valid();
+    }
+
+    inline void Instance::create(const core::ApplicationInfo& info) {
+        if (valid()) {
+            return;
+        }
+
+        applicationInfo_ = info;
 
         std::uint32_t driverVersion = getDriverSupportedVersion();
         std::uint32_t driverVersionMajor = VK_API_VERSION_MAJOR(driverVersion);
@@ -39,9 +73,9 @@ namespace lumina::renderer {
         meta::assert(extensionRequirementsMet, "one or more required Vulkan instance extensions are unavailable");
         meta::assert(layerRequirementsMet, "one or more required Vulkan instance layers are unavailable");
 
-        auto appVersionMajor = info.version.major;
-        auto appVersionMinor = info.version.minor;
-        auto appVersionPatch = info.version.patch;
+        auto appVersionMajor = applicationInfo_.version.major;
+        auto appVersionMinor = applicationInfo_.version.minor;
+        auto appVersionPatch = applicationInfo_.version.patch;
 
         auto engineVersionMajor = framework::VersionMajor;
         auto engineVersionMinor = framework::VersionMinor;
@@ -80,40 +114,8 @@ namespace lumina::renderer {
 
         VkResult result = vkCreateInstance(&createInfo, nullptr, &instance_);
 
-        meta::assert(result == VK_SUCCESS, "Vulkan instance creation failed: {}", Vulkan_errorString(result));
+        meta::assert(result == VK_SUCCESS, "Vulkan instance creation failed: {}", core::Vulkan_errorString(result));
         meta::logDebug(validation(), "Vulkan instance initialised");
-    }
-
-    inline Instance::~Instance() {
-        destroy();
-    }
-
-    inline Instance::Instance(Instance&& other) noexcept
-        : applicationInfo_(other.applicationInfo_), instance_(other.instance_) {
-        other.applicationInfo_ = {};
-        other.instance_ = nullptr;
-    }
-
-    inline Instance& Instance::operator=(Instance&& other) noexcept {
-        if (this == &other) {
-            return *this;
-        }
-
-        applicationInfo_ = other.applicationInfo_;
-        instance_ = other.instance_;
-
-        other.applicationInfo_ = {};
-        other.instance_ = nullptr;
-
-        return *this;
-    }
-
-    inline const core::ApplicationInfo& Instance::applicationInfo() const {
-        return applicationInfo_;
-    }
-
-    inline void Instance::update() {
-        glfwPollEvents();
     }
 
     inline void Instance::destroy() {
@@ -122,7 +124,6 @@ namespace lumina::renderer {
         }
 
         vkDestroyInstance(instance_, nullptr);
-        glfwTerminate();
 
         meta::logDebug(validation(), "Vulkan instance destroyed");
 
@@ -134,20 +135,12 @@ namespace lumina::renderer {
         return instance_ != nullptr;
     }
 
-    inline Instance::operator bool() const {
-        return valid();
+    inline const core::ApplicationInfo& Instance::applicationInfo() const {
+        return applicationInfo_;
     }
 
     inline bool Instance::validation() const {
         return applicationInfo_.features.validation;
-    }
-
-    inline void Instance::initialiseSystemAPI() const {
-        glfwSetErrorCallback(GLFW_errorCallback);
-        glfwInit();
-
-        // stop GLFW from creating windows with an OpenGL context
-        glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     }
 
     inline Instance::ExtensionProperties Instance::getAvailableExtensions() const {
@@ -155,13 +148,13 @@ namespace lumina::renderer {
 
         VkResult result = vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
 
-        meta::assert(result == VK_SUCCESS, "Vulkan instance extension property enumeration failed: {}", Vulkan_errorString(result));
+        meta::assert(result == VK_SUCCESS, "Vulkan instance extension property enumeration failed: {}", core::Vulkan_errorString(result));
 
         ExtensionProperties extensions(extensionCount);
 
         result = vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, extensions.data());
 
-        meta::assert(result == VK_SUCCESS, "Vulkan instance extension property enumeration failed: {}", Vulkan_errorString(result));
+        meta::assert(result == VK_SUCCESS, "Vulkan instance extension property enumeration failed: {}", core::Vulkan_errorString(result));
 
         return extensions;
     }
@@ -171,13 +164,13 @@ namespace lumina::renderer {
 
         VkResult result = vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
 
-        meta::assert(result == VK_SUCCESS, "Vulkan instance layer property enumeration failed: {}", Vulkan_errorString(result));
+        meta::assert(result == VK_SUCCESS, "Vulkan instance layer property enumeration failed: {}", core::Vulkan_errorString(result));
 
         LayerProperties layers(layerCount);
 
         result = vkEnumerateInstanceLayerProperties(&layerCount, layers.data());
 
-        meta::assert(result == VK_SUCCESS, "Vulkan instance layer property enumeration failed: {}", Vulkan_errorString(result));
+        meta::assert(result == VK_SUCCESS, "Vulkan instance layer property enumeration failed: {}", core::Vulkan_errorString(result));
 
         return layers;
     }
@@ -280,7 +273,7 @@ namespace lumina::renderer {
 
         VkResult result = vkEnumerateInstanceVersion(&supportedVersion);
 
-        meta::assert(result == VK_SUCCESS, "Vulkan API version query failed: {}", Vulkan_errorString(result));
+        meta::assert(result == VK_SUCCESS, "Vulkan API version query failed: {}", core::Vulkan_errorString(result));
 
         std::uint32_t major = VK_API_VERSION_MAJOR(supportedVersion);
         std::uint32_t minor = VK_API_VERSION_MINOR(supportedVersion);

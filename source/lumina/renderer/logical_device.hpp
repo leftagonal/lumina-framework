@@ -1,8 +1,6 @@
 #pragma once
 
-#include "vulkan.hpp"
-
-#include <vector>
+#include "surface_manager.hpp"
 
 namespace lumina::renderer {
     enum class DeviceType {
@@ -17,13 +15,13 @@ namespace lumina::renderer {
     };
 
     class Instance;
-    class WindowManager;
 
     class LogicalDevice {
     public:
         LogicalDevice() = default;
-        LogicalDevice(WindowManager& windowManager, const DeviceRequirements& requirements);
         ~LogicalDevice();
+
+        LogicalDevice(Instance& instance, SurfaceManager& surfaceManager, const DeviceRequirements& requirements);
 
         LogicalDevice(const LogicalDevice&) = delete;
         LogicalDevice(LogicalDevice&&) noexcept;
@@ -31,16 +29,15 @@ namespace lumina::renderer {
         LogicalDevice& operator=(const LogicalDevice&) = delete;
         LogicalDevice& operator=(LogicalDevice&&) noexcept;
 
+        explicit operator bool() const;
+
+        void create(Instance& instance, SurfaceManager& surfaceManager, const DeviceRequirements& requirements);
+        void destroy();
+
         [[nodiscard]] Instance& instance();
         [[nodiscard]] const Instance& instance() const;
 
-        [[nodiscard]] WindowManager& windowManager();
-        [[nodiscard]] const WindowManager& windowManager() const;
-
-        void destroy();
-
         [[nodiscard]] bool valid() const;
-        explicit operator bool() const;
 
     private:
         struct QueueFamilySelection {
@@ -61,9 +58,10 @@ namespace lumina::renderer {
         using Names = std::vector<const char*>;
 
         Instance* instance_ = nullptr;
-        WindowManager* windowManager_ = nullptr;
+
         VkPhysicalDevice physicalDevice_ = nullptr;
         VkDevice device_ = nullptr;
+
         VkQueue presentQueue_ = nullptr;
         VkQueue graphicsQueue_ = nullptr;
         VkQueue computeQueue_ = nullptr;
@@ -74,7 +72,7 @@ namespace lumina::renderer {
         [[nodiscard]] QueueCreateInfos makeQueueCreateInfos(const QueueFamilySelections& queueSelections) const;
         [[nodiscard]] PhysicalDevices getAvailablePhysicalDevices() const;
         [[nodiscard]] QueueFamilies getAvailableQueueFamilies() const;
-        [[nodiscard]] QueueFamilySelections pickSuitableQueueFamilies(const QueueFamilies& families) const;
+        [[nodiscard]] QueueFamilySelections pickSuitableQueueFamilies(const QueueFamilies& families, SurfaceManager& surfaceManager) const;
         [[nodiscard]] ExtensionProperties getAvailableExtensions() const;
         [[nodiscard]] bool testRequirements(const Names& requirements, const ExtensionProperties& available) const;
 

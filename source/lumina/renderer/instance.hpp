@@ -1,8 +1,7 @@
 #pragma once
 
 #include <lumina/core/application.hpp>
-
-#include "vulkan.hpp"
+#include <lumina/core/vulkan.hpp>
 
 #include <vector>
 
@@ -14,8 +13,9 @@ namespace lumina::renderer {
     class Instance {
     public:
         Instance() = default;
-        Instance(const core::ApplicationInfo& info);
         ~Instance();
+
+        Instance(const core::ApplicationInfo& info);
 
         Instance(const Instance&) = delete;
         Instance(Instance&&) noexcept;
@@ -23,13 +23,14 @@ namespace lumina::renderer {
         Instance& operator=(const Instance&) = delete;
         Instance& operator=(Instance&&) noexcept;
 
-        [[nodiscard]] const core::ApplicationInfo& applicationInfo() const;
+        explicit operator bool() const;
 
-        void update();
+        void create(const core::ApplicationInfo& info);
         void destroy();
 
+        [[nodiscard]] const core::ApplicationInfo& applicationInfo() const;
+
         [[nodiscard]] bool valid() const;
-        explicit operator bool() const;
 
     private:
         using ExtensionProperties = std::vector<VkExtensionProperties>;
@@ -41,7 +42,6 @@ namespace lumina::renderer {
 
         [[nodiscard]] bool validation() const;
 
-        void initialiseSystemAPI() const;
         void appendRequiredExtensions(Names& requirements) const;
         void appendRequiredLayers(Names& requirements) const;
 

@@ -5,5 +5,4 @@
 
 #include "renderer/instance.inl"
 #include "renderer/logical_device.inl"
-#include "renderer/window.inl"
-#include "renderer/window_manager.inl"
+#include "renderer/surface_manager.inl"

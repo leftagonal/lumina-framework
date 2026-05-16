@@ -6,19 +6,21 @@
 #include <vector>
 
 namespace lumina::events {
-    class StreamToken final {
+    class Token final {
     public:
-        StreamToken(std::size_t index, std::size_t typeIndex)
+        Token() = default;
+
+        Token(std::size_t index, std::size_t typeIndex)
             : index_(index), typeIndex_(typeIndex) {
         }
 
-        ~StreamToken() = default;
+        ~Token() = default;
 
-        StreamToken(const StreamToken&) = delete;
-        StreamToken(StreamToken&&) noexcept = default;
+        Token(const Token&) = delete;
+        Token(Token&&) noexcept = default;
 
-        StreamToken& operator=(const StreamToken&) = delete;
-        StreamToken& operator=(StreamToken&&) noexcept = default;
+        Token& operator=(const Token&) = delete;
+        Token& operator=(Token&&) noexcept = default;
 
         [[nodiscard]] std::size_t index() const noexcept {
             return index_;
@@ -44,9 +46,9 @@ namespace lumina::events {
         GenericStream& operator=(const GenericStream&) = delete;
         GenericStream& operator=(GenericStream&&) noexcept = default;
 
-        [[nodiscard]] virtual bool connected(const StreamToken& token) const = 0;
+        [[nodiscard]] virtual bool connected(const Token& token) const = 0;
 
-        virtual void disconnect(const StreamToken& token) = 0;
+        virtual void disconnect(const Token& token) = 0;
         virtual void dispatch() = 0;
     };
 
@@ -66,7 +68,7 @@ namespace lumina::events {
         Stream& operator=(Stream&&) noexcept = default;
 
         template <auto Fn>
-        StreamToken connect() {
+        Token connect() {
             std::size_t index = 0;
 
             if (!freeList_.empty()) {
@@ -83,7 +85,7 @@ namespace lumina::events {
         }
 
         template <auto Fn>
-        StreamToken connect(extraction::InstanceType<Fn>& instance) {
+        Token connect(extraction::InstanceType<Fn>& instance) {
             std::size_t index = 0;
 
             if (!freeList_.empty()) {
@@ -99,11 +101,11 @@ namespace lumina::events {
             return {index, typeIndex<T>()};
         }
 
-        [[nodiscard]] bool connected(const StreamToken& token) const override {
+        [[nodiscard]] bool connected(const Token& token) const override {
             return token.index() < delegates_.size() && typeIndex<T>() == token.typeIndex() && delegates_[token.index()];
         }
 
-        void disconnect(const StreamToken& token) override {
+        void disconnect(const Token& token) override {
             if (!connected(token)) {
                 return;
             }
@@ -118,6 +120,36 @@ namespace lumina::events {
 
         void enqueue(T&& event) {
             eventQueue_.emplace_back(event);
+        }
+
+        /**
+         * @brief Triggers an event if someone is listening, enqueues if not.
+         *
+         * @param event The event to attempt.
+         */
+        void attempt(const T& event) {
+            bool noDelegates = delegates_.size() - freeList_.size() == 0;
+
+            if (noDelegates) {
+                enqueue(event);
+            } else {
+                trigger(event);
+            }
+        }
+
+        /**
+         * @brief Triggers an event if someone is listening, enqueues if not.
+         *
+         * @param event The event to attempt.
+         */
+        void attempt(T&& event) {
+            bool noDelegates = delegates_.size() - freeList_.size() == 0;
+
+            if (noDelegates) {
+                enqueue(event);
+            } else {
+                trigger(event);
+            }
         }
 
         void trigger(const T& event) const {

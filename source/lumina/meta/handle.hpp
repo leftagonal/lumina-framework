@@ -2,11 +2,11 @@
 
 #include <cstddef>
 
-namespace lumina::renderer {
+namespace lumina::meta {
     template <typename T>
     class Handle final {
     public:
-        using TagType = T;
+        using Type = T;
 
         Handle() = default;
 

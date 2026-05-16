@@ -5,7 +5,7 @@
 
 #include <lumina/meta/exceptions.hpp>
 
-namespace lumina::renderer {
+namespace lumina::core {
     [[nodiscard]] inline std::string_view GLFW_errorString(int errorCode) {
         switch (errorCode) {
             case GLFW_NO_ERROR: {

@@ -4,21 +4,70 @@
 
 #include "instance.hpp"
 #include "logical_device.hpp"
-#include "window_manager.hpp"
 
 #include <unordered_map>
 
 namespace lumina::renderer {
-    inline LogicalDevice::LogicalDevice(WindowManager& windowManager, const DeviceRequirements& requirements)
-        : instance_(&windowManager.instance()), windowManager_(&windowManager) {
-        meta::assert(windowManager.count() > 0, "minimum one window is required for device creation");
+    inline LogicalDevice::LogicalDevice(Instance& instance, SurfaceManager& surfaceManager, const DeviceRequirements& requirements) {
+        create(instance, surfaceManager, requirements);
+    }
+
+    inline LogicalDevice::~LogicalDevice() {
+        destroy();
+    }
+
+    LogicalDevice::LogicalDevice(LogicalDevice&& other) noexcept
+        : instance_(other.instance_), physicalDevice_(other.physicalDevice_),
+          device_(other.device_), presentQueue_(other.presentQueue_), graphicsQueue_(other.graphicsQueue_),
+          computeQueue_(other.computeQueue_), transferQueue_(other.transferQueue_) {
+        other.instance_ = nullptr;
+        other.physicalDevice_ = nullptr;
+        other.device_ = nullptr;
+        other.presentQueue_ = nullptr;
+        other.graphicsQueue_ = nullptr;
+        other.computeQueue_ = nullptr;
+        other.transferQueue_ = nullptr;
+    }
+
+    LogicalDevice& LogicalDevice::operator=(LogicalDevice&& other) noexcept {
+        if (this == &other) {
+            return *this;
+        }
+
+        instance_ = other.instance_;
+        physicalDevice_ = other.physicalDevice_;
+        device_ = other.device_;
+        presentQueue_ = other.presentQueue_;
+        graphicsQueue_ = other.graphicsQueue_;
+        computeQueue_ = other.computeQueue_;
+        transferQueue_ = other.transferQueue_;
+
+        other.instance_ = nullptr;
+        other.physicalDevice_ = nullptr;
+        other.device_ = nullptr;
+        other.presentQueue_ = nullptr;
+        other.graphicsQueue_ = nullptr;
+        other.computeQueue_ = nullptr;
+        other.transferQueue_ = nullptr;
+
+        return *this;
+    }
+
+    inline void LogicalDevice::create(Instance& instance, SurfaceManager& surfaceManager, const DeviceRequirements& requirements) {
+        if (valid()) {
+            return;
+        }
+
+        meta::assert(!surfaceManager.empty(), "logical device requires at least one valid surface before creation");
+
+        instance_ = &instance;
 
         PhysicalDevices physicalDevices = getAvailablePhysicalDevices();
 
         pickMostSuitablePhysicalDevice(physicalDevices, requirements);
 
         QueueFamilies queueFamilies = getAvailableQueueFamilies();
-        QueueFamilySelections queueSelections = pickSuitableQueueFamilies(queueFamilies);
+        QueueFamilySelections queueSelections = pickSuitableQueueFamilies(queueFamilies, surfaceManager);
         QueueCreateInfos queueCreateInfos = makeQueueCreateInfos(queueSelections);
 
         Names requiredExtensions = {
@@ -51,7 +100,7 @@ namespace lumina::renderer {
 
         VkResult result = vkCreateDevice(physicalDevice_, &createInfo, nullptr, &device_);
 
-        meta::assert(result == VK_SUCCESS, "logical device creation failed: {}", Vulkan_errorString(result));
+        meta::assert(result == VK_SUCCESS, "logical device creation failed: {}", core::Vulkan_errorString(result));
         meta::logDebug(validation(), "Vulkan logical device initialised");
 
         vkGetDeviceQueue(device_, queueSelections[0].familyIndex, queueSelections[0].queueIndex, &presentQueue_);
@@ -62,64 +111,12 @@ namespace lumina::renderer {
         meta::logDebug(validation(), "Vulkan queues assigned");
     }
 
-    inline LogicalDevice::~LogicalDevice() {
-        destroy();
-    }
-
-    LogicalDevice::LogicalDevice(LogicalDevice&& other) noexcept
-        : instance_(other.instance_), windowManager_(other.windowManager_), physicalDevice_(other.physicalDevice_),
-          device_(other.device_), presentQueue_(other.presentQueue_), graphicsQueue_(other.graphicsQueue_),
-          computeQueue_(other.computeQueue_), transferQueue_(other.transferQueue_) {
-        other.instance_ = nullptr;
-        other.windowManager_ = nullptr;
-        other.physicalDevice_ = nullptr;
-        other.device_ = nullptr;
-        other.presentQueue_ = nullptr;
-        other.graphicsQueue_ = nullptr;
-        other.computeQueue_ = nullptr;
-        other.transferQueue_ = nullptr;
-    }
-
-    LogicalDevice& LogicalDevice::operator=(LogicalDevice&& other) noexcept {
-        if (this == &other) {
-            return *this;
-        }
-
-        instance_ = other.instance_;
-        windowManager_ = other.windowManager_;
-        physicalDevice_ = other.physicalDevice_;
-        device_ = other.device_;
-        presentQueue_ = other.presentQueue_;
-        graphicsQueue_ = other.graphicsQueue_;
-        computeQueue_ = other.computeQueue_;
-        transferQueue_ = other.transferQueue_;
-
-        other.instance_ = nullptr;
-        other.windowManager_ = nullptr;
-        other.physicalDevice_ = nullptr;
-        other.device_ = nullptr;
-        other.presentQueue_ = nullptr;
-        other.graphicsQueue_ = nullptr;
-        other.computeQueue_ = nullptr;
-        other.transferQueue_ = nullptr;
-
-        return *this;
-    }
-
     inline Instance& LogicalDevice::instance() {
         return *instance_;
     }
 
     inline const Instance& LogicalDevice::instance() const {
         return *instance_;
-    }
-
-    inline WindowManager& LogicalDevice::windowManager() {
-        return *windowManager_;
-    }
-
-    inline const WindowManager& LogicalDevice::windowManager() const {
-        return *windowManager_;
     }
 
     inline void LogicalDevice::destroy() {
@@ -132,7 +129,6 @@ namespace lumina::renderer {
         meta::logDebug(validation(), "Vulkan logical device destroyed");
 
         instance_ = nullptr;
-        windowManager_ = nullptr;
         physicalDevice_ = nullptr;
         device_ = nullptr;
         presentQueue_ = nullptr;
@@ -160,13 +156,13 @@ namespace lumina::renderer {
 
         VkResult result = vkEnumeratePhysicalDevices(instance, &physicalDeviceCount, nullptr);
 
-        meta::assert(result == VK_SUCCESS, "failed to enumerate Vulkan physical devices: {}", Vulkan_errorString(result));
+        meta::assert(result == VK_SUCCESS, "failed to enumerate Vulkan physical devices: {}", core::Vulkan_errorString(result));
 
         std::vector<VkPhysicalDevice> physicalDevices(physicalDeviceCount);
 
         result = vkEnumeratePhysicalDevices(instance, &physicalDeviceCount, physicalDevices.data());
 
-        meta::assert(result == VK_SUCCESS, "failed to enumerate Vulkan physical devices: {}", Vulkan_errorString(result));
+        meta::assert(result == VK_SUCCESS, "failed to enumerate Vulkan physical devices: {}", core::Vulkan_errorString(result));
 
         return physicalDevices;
     }
@@ -198,9 +194,8 @@ namespace lumina::renderer {
         meta::logDebugListElement(validation(), 1, "vendor ID: {}", properties.vendorID);
     }
 
-    inline LogicalDevice::QueueFamilySelections LogicalDevice::pickSuitableQueueFamilies(const QueueFamilies& families) const {
-        Window& drivingWindow = windowManager_->windows().front();
-        VkSurfaceKHR drivingSurface = accessors::WindowAccessor::surface(drivingWindow);
+    inline LogicalDevice::QueueFamilySelections LogicalDevice::pickSuitableQueueFamilies(const QueueFamilies& families, SurfaceManager& surfaceManager) const {
+        VkSurfaceKHR drivingSurface = accessors::SurfaceManagerAccessor::firstValidSurface(surfaceManager);
 
         std::optional<QueueFamilySelection> graphics;
         std::optional<QueueFamilySelection> present;
@@ -318,13 +313,13 @@ namespace lumina::renderer {
 
         VkResult result = vkEnumerateDeviceExtensionProperties(physicalDevice_, nullptr, &extensionCount, nullptr);
 
-        meta::assert(result == VK_SUCCESS, "failed to enumerate available Vulkan physical device extensions: {}", Vulkan_errorString(result));
+        meta::assert(result == VK_SUCCESS, "failed to enumerate available Vulkan physical device extensions: {}", core::Vulkan_errorString(result));
 
         ExtensionProperties extensions(extensionCount);
 
         result = vkEnumerateDeviceExtensionProperties(physicalDevice_, nullptr, &extensionCount, extensions.data());
 
-        meta::assert(result == VK_SUCCESS, "failed to enumerate available Vulkan physical device extensions: {}", Vulkan_errorString(result));
+        meta::assert(result == VK_SUCCESS, "failed to enumerate available Vulkan physical device extensions: {}", core::Vulkan_errorString(result));
 
         return extensions;
     }

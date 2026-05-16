@@ -4,7 +4,7 @@
 
 #include <string_view>
 
-namespace lumina::renderer {
+namespace lumina::core {
     [[nodiscard]] inline std::string_view Vulkan_errorString(const VkResult& result) {
         switch (result) {
             case VK_SUCCESS: {
