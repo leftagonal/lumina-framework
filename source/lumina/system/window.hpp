@@ -115,6 +115,7 @@ namespace lumina::system {
 
         [[nodiscard]] bool valid() const;
         [[nodiscard]] WindowHandle handle() const;
+        [[nodiscard]] WindowExtent extent() const;
 
     private:
         GLFWwindow* window_ = nullptr;

@@ -1,17 +1,23 @@
 #pragma once
 
+#include "queue.hpp"
 #include "surface_manager.hpp"
 
 namespace lumina::renderer {
-
     class LogicalDevice;
+    class Queue;
+
+    struct SwapchainQueueInfo {
+        QueueFamilyDefinition graphicsFamily;
+        QueueFamilyDefinition presentFamily;
+    };
 
     struct SwapchainInfo {
-        SurfacePresentMode presentMode;
-        SurfaceFormat format;
-        SurfaceColourSpace colourSpace;
-        std::size_t minimumImageCount;
-        std::size_t minimumFramesInFlight;
+        PresentMode presentMode;
+        SurfaceFormat surfaceFormat;
+
+        std::uint32_t minimumImageCount;
+        std::uint32_t minimumFramesInFlight;
     };
 
     namespace accessors {
@@ -23,25 +29,29 @@ namespace lumina::renderer {
         Swapchain() = default;
         ~Swapchain();
 
-        Swapchain(LogicalDevice& device, SurfaceManager& surfaceManager, const system::WindowHandle& windowHandle);
+        Swapchain(LogicalDevice& device, SurfaceManager& surfaceManager, const SwapchainInfo& info, const SwapchainQueueInfo& queueInfo, const system::WindowHandle& windowHandle);
+
+        Swapchain(const Swapchain&) = delete;
+        Swapchain(Swapchain&& other) noexcept;
+
+        Swapchain& operator=(const Swapchain&) = delete;
+        Swapchain& operator=(Swapchain&& other) noexcept;
 
         explicit operator bool() const;
 
-        void create(LogicalDevice& device, SurfaceManager& surfaceManager, const system::WindowHandle& windowHandle);
+        void create(LogicalDevice& device, SurfaceManager& surfaceManager, const SwapchainInfo& info, const SwapchainQueueInfo& queueInfo, const system::WindowHandle& windowHandle);
+        void recreate(SurfaceManager& surfaceManager, const SwapchainInfo& info, const SwapchainQueueInfo& queueInfo, const system::WindowHandle& windowHandle);
         void destroy();
 
         [[nodiscard]] bool valid() const;
 
-        [[nodiscard]] LogicalDevice& device();
-        [[nodiscard]] const LogicalDevice& device() const;
-
-        [[nodiscard]] system::WindowHandle windowHandle() const;
+        [[nodiscard]] LogicalDevice& logicalDevice();
+        [[nodiscard]] const LogicalDevice& logicalDevice() const;
 
     private:
         LogicalDevice* logicalDevice_ = nullptr;
 
         VkSwapchainKHR swapchain_ = nullptr;
-        system::WindowHandle windowHandle_;
 
         friend class accessors::SwapchainAccessor;
     };

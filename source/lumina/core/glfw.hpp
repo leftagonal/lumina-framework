@@ -60,6 +60,6 @@ namespace lumina::core {
     }
 
     inline void GLFW_errorCallback(int errorCode, const char* description) {
-        meta::terminate("GLFW error {}: {}", GLFW_errorString(errorCode), description);
+        meta::cfail("GLFW error {}: {}", GLFW_errorString(errorCode), description);
     }
 }

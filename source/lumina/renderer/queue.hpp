@@ -44,6 +44,9 @@ namespace lumina::renderer {
         [[nodiscard]] QueueIntent intent() const;
         [[nodiscard]] std::size_t index() const;
 
+        [[nodiscard]] QueueFamilySelection selection() const;
+        [[nodiscard]] QueueFamilyDefinition definition() const;
+
     private:
         VkQueue queue_ = nullptr;
 

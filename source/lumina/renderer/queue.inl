@@ -73,4 +73,12 @@ namespace lumina::renderer {
     std::size_t Queue::index() const {
         return index_;
     }
+
+    QueueFamilySelection Queue::selection() const {
+        return selection_;
+    }
+
+    QueueFamilyDefinition Queue::definition() const {
+        return definition_;
+    }
 }

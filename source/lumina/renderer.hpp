@@ -8,3 +8,5 @@
 #include "renderer/queue.inl"
 #include "renderer/surface.inl"
 #include "renderer/surface_manager.inl"
+#include "renderer/swapchain.inl"
+#include "renderer/swapchain_manager.inl"

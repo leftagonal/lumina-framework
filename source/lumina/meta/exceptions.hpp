@@ -20,6 +20,11 @@ namespace lumina::meta {
         std::string message_;
     };
 
+    template <typename... Args>
+    [[noreturn]] inline void fail(std::format_string<Args...> message, Args&&... args) {
+        throw Exception(message, std::forward<Args>(args)...);
+    }
+
     /**
      * @brief Ensures a condition is true, otherwise it throws an exception
      *
@@ -31,8 +36,21 @@ namespace lumina::meta {
     template <typename... Args>
     inline void assert(bool condition, std::format_string<Args...> message, Args&&... args) {
         if (!condition) {
-            throw Exception(message, std::forward<Args>(args)...);
+            fail(message, std::forward<Args>(args)...);
         }
+    }
+
+    /**
+     * @brief Logs some error information, then terminates the process.
+     *
+     * @tparam Args The format argument types.
+     * @param message The message format string.
+     * @param args The format arguments.
+     */
+    template <typename... Args>
+    [[noreturn]] inline void cfail(std::format_string<Args...> message, Args&&... args) {
+        logError(message, std::forward<Args>(args)...);
+        std::exit(1);
     }
 
     /**
@@ -46,22 +64,7 @@ namespace lumina::meta {
     template <typename... Args>
     inline void cassert(bool condition, std::format_string<Args...> message, Args&&... args) {
         if (!condition) {
-            meta::logError(message, std::forward<Args>(args)...);
-            std::exit(1);
+            cfail(message, std::forward<Args>(args)...);
         }
-    }
-
-    /**
-     * @brief Logs some error information, then terminates the process.
-     *
-     * @tparam Args The format argument types.
-     * @param message The message format string.
-     * @param args The format arguments.
-     */
-    template <typename... Args>
-    inline void terminate(std::format_string<Args...> message, Args&&... args) {
-        logError(message, std::forward<Args>(args)...);
-
-        std::exit(1);
     }
 }

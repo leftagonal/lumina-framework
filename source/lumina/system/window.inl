@@ -101,7 +101,11 @@ namespace lumina::system {
     }
 
     inline WindowHandle Window::handle() const {
-        return handle_; 
+        return handle_;
+    }
+
+    inline WindowExtent Window::extent() const {
+        return state_.current.extent;
     }
 
     Window& Window::extract(GLFWwindow* handle) {
